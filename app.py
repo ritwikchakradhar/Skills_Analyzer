@@ -139,26 +139,33 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
     if pd.isna(skills_str) or skills_str == 'nan' or not skills_str:
         return None
     
-    skills_str = str(skills_str).lower()
-    max_score = None
-    
-    # Split by multiple skills if present
-    skills_list = skills_str.split('\n') if '\n' in skills_str else [skills_str]
-    
-    for skill_item in skills_list:
-        for variation in variations:
-            pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
-            matches = re.finditer(pattern, skill_item, re.IGNORECASE)
-            
-            for match in matches:
-                try:
-                    score = float(match.group(1))
-                    if max_score is None or score > max_score:
-                        max_score = score
-                except (ValueError, TypeError):
-                    continue
-    
-    return max_score
+    try:
+        skills_str = str(skills_str).lower()
+        max_score = None
+        
+        # Split skills if on multiple lines
+        skills_list = [s.strip() for s in skills_str.split('\n') if s.strip()]
+        if not skills_list:
+            skills_list = [skills_str]
+        
+        for skill_item in skills_list:
+            for variation in variations:
+                pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
+                matches = re.finditer(pattern, skill_item, re.IGNORECASE)
+                
+                for match in matches:
+                    try:
+                        score = float(match.group(1))
+                        if max_score is None or score > max_score:
+                            max_score = score
+                    except (ValueError, TypeError):
+                        continue
+        
+        return max_score
+        
+    except Exception as e:
+        st.write(f"Error extracting score from '{skills_str}': {e}")
+        return None
 
 def analyze_skills(
     trainers_df: pd.DataFrame,
@@ -169,16 +176,33 @@ def analyze_skills(
 ) -> tuple[pd.DataFrame, Dict[str, int]]:
     """Analyze skills and return qualified trainers."""
     try:
+        st.write("Starting analysis...")
+        st.write("Input parameters:", {
+            "selected_skills": selected_skills,
+            "minimum_score": minimum_score,
+            "minimum_score_type": type(minimum_score),
+            "business_lines": business_lines
+        })
+        
         # Create a copy of the dataframe
         trainers_df = trainers_df.copy()
+        st.write("Trainers data shape:", trainers_df.shape)
         
-        # Convert skills columns to string and replace NaN with empty string
+        # Show sample of trainers data
+        st.write("Sample of trainers data:")
+        st.write(trainers_df[['Primary Skills', 'Secondary Skills']].head())
+        
+        # Convert skills columns to string and replace NaN
         trainers_df['Primary Skills'] = trainers_df['Primary Skills'].fillna('')
         trainers_df['Secondary Skills'] = trainers_df['Secondary Skills'].fillna('')
         
-        # Filter business lines if specified
+        st.write("After cleaning null values - sample:")
+        st.write(trainers_df[['Primary Skills', 'Secondary Skills']].head())
+        
+        # Filter business lines
         if business_lines:
             trainers_df = trainers_df[trainers_df['Business line'].isin(business_lines)].copy()
+            st.write(f"After business line filter - {len(trainers_df)} records")
         
         # Initialize results
         skill_scores = {}
@@ -187,51 +211,90 @@ def analyze_skills(
         
         # Process each skill
         for skill in selected_skills:
+            st.write(f"\nProcessing skill: {skill}")
             variations = st.session_state.skill_variations.get(skill, [skill])
+            st.write(f"Skill variations: {variations}")
             
-            # Calculate scores for primary and secondary skills
-            primary_scores = trainers_df['Primary Skills'].apply(
-                lambda x: extract_skill_score(str(x), variations)
-            )
-            secondary_scores = trainers_df['Secondary Skills'].apply(
-                lambda x: extract_skill_score(str(x), variations)
-            )
-            
-            # Convert to numeric, handling NaN
-            primary_scores = pd.to_numeric(primary_scores, errors='coerce')
-            secondary_scores = pd.to_numeric(secondary_scores, errors='coerce')
-            
-            # Get maximum score between primary and secondary
-            max_scores = pd.DataFrame({
-                'primary': primary_scores,
-                'secondary': secondary_scores
-            }).max(axis=1, skipna=True)
-            
-            # Store the scores
-            skill_scores[f'{skill}_Max_Score'] = max_scores
-            
-            # Create qualification mask
-            skill_mask = max_scores.fillna(0) >= float(minimum_score)
-            qualified_mask &= skill_mask
-            skill_stats[skill] = skill_mask.sum()
+            # Calculate scores with logging
+            try:
+                # Primary skills
+                primary_scores = []
+                for idx, skill_str in enumerate(trainers_df['Primary Skills']):
+                    try:
+                        score = extract_skill_score(str(skill_str), variations)
+                        primary_scores.append(score)
+                    except Exception as e:
+                        st.write(f"Error processing primary skill {idx}: {e}")
+                        primary_scores.append(None)
+                
+                # Secondary skills
+                secondary_scores = []
+                for idx, skill_str in enumerate(trainers_df['Secondary Skills']):
+                    try:
+                        score = extract_skill_score(str(skill_str), variations)
+                        secondary_scores.append(score)
+                    except Exception as e:
+                        st.write(f"Error processing secondary skill {idx}: {e}")
+                        secondary_scores.append(None)
+                
+                # Convert to numeric
+                primary_scores = pd.Series(primary_scores, index=trainers_df.index)
+                secondary_scores = pd.Series(secondary_scores, index=trainers_df.index)
+                
+                st.write(f"Sample scores for {skill}:")
+                st.write("Primary:", primary_scores.head())
+                st.write("Secondary:", secondary_scores.head())
+                
+                # Convert to numeric
+                primary_scores = pd.to_numeric(primary_scores, errors='coerce')
+                secondary_scores = pd.to_numeric(secondary_scores, errors='coerce')
+                
+                # Calculate max scores
+                max_scores = pd.DataFrame({
+                    'primary': primary_scores,
+                    'secondary': secondary_scores
+                }).max(axis=1, skipna=True)
+                
+                st.write("Max scores sample:", max_scores.head())
+                st.write("Max scores dtype:", max_scores.dtype)
+                st.write("Minimum score:", minimum_score, "Type:", type(minimum_score))
+                
+                # Create qualification mask
+                max_scores_filled = max_scores.fillna(0)
+                st.write("Filled scores sample:", max_scores_filled.head())
+                st.write("Filled scores dtype:", max_scores_filled.dtype)
+                
+                skill_mask = max_scores_filled >= float(minimum_score)
+                st.write("Skill mask sample:", skill_mask.head())
+                
+                qualified_mask &= skill_mask
+                skill_stats[skill] = skill_mask.sum()
+                
+                # Store scores
+                skill_scores[f'{skill}_Max_Score'] = max_scores
+                
+            except Exception as e:
+                st.write(f"Error processing skill {skill}: {e}")
+                raise
         
         # Get qualified trainers
         qualified_trainers = trainers_df[qualified_mask].copy()
+        st.write(f"\nFound {len(qualified_trainers)} qualified trainers")
         
-        # Add skill scores
-        for col, scores in skill_scores.items():
-            qualified_trainers[col] = scores.round(1)  # Round to 1 decimal place
-        
-        # Add manager information if any trainers qualified
         if len(qualified_trainers) > 0:
+            # Add skill scores
+            for col, scores in skill_scores.items():
+                qualified_trainers[col] = scores.round(1)
+            
+            # Add manager information
             manager_mapping = managers_df.set_index('developer turing email')['manager turing email'].to_dict()
             qualified_trainers['Manager_Turing_Email'] = qualified_trainers['developer turing email'].map(manager_mapping)
             
-            # Calculate and round average score
+            # Calculate average score
             score_columns = [f'{skill}_Max_Score' for skill in selected_skills]
             qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1).round(1)
             
-            # Sort by average score
+            # Sort results
             qualified_trainers = qualified_trainers.sort_values(
                 by='Average_Skill_Score',
                 ascending=False,
@@ -241,7 +304,10 @@ def analyze_skills(
         return qualified_trainers, skill_stats
         
     except Exception as e:
+        import traceback
         st.error(f"Error in analysis: {str(e)}")
+        st.error("Full traceback:")
+        st.code(traceback.format_exc())
         return pd.DataFrame(), {}
 
 def get_download_link(df: pd.DataFrame, filename: str) -> str:
