@@ -32,6 +32,50 @@ if 'skill_variations' not in st.session_state:
         'cplusplus': ['c++', 'cpp']
     }
 
+def validate_and_clean_managers_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate and clean managers DataFrame columns."""
+    # Clean column names: remove quotes, spaces, and convert to lowercase
+    df.columns = df.columns.str.replace('="', '').str.replace('"', '').str.strip().str.lower()
+    
+    # List of possible variations of required column names
+    developer_email_variants = ['developer turing email', 'developerturingemail', 'developer_turing_email', 'developer email']
+    manager_email_variants = ['manager turing email', 'managerturingemail', 'manager_turing_email', 'manager email']
+    
+    # Check for developer email column
+    dev_email_col = None
+    for variant in developer_email_variants:
+        if variant in df.columns:
+            dev_email_col = variant
+            break
+    
+    # Check for manager email column
+    manager_email_col = None
+    for variant in manager_email_variants:
+        if variant in df.columns:
+            manager_email_col = variant
+            break
+    
+    if not dev_email_col or not manager_email_col:
+        missing_cols = []
+        if not dev_email_col:
+            missing_cols.append("Developer Turing Email")
+        if not manager_email_col:
+            missing_cols.append("Manager Turing Email")
+        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+    
+    # Rename columns to standard format
+    column_mapping = {
+        dev_email_col: 'developer turing email',
+        manager_email_col: 'manager turing email'
+    }
+    df = df.rename(columns=column_mapping)
+    
+    # Clean data in the columns
+    for col in ['developer turing email', 'manager turing email']:
+        df[col] = df[col].str.replace('="', '').str.replace('"', '').str.strip()
+    
+    return df
+
 def validate_email(email: str) -> bool:
     """Validate email format."""
     if pd.isna(email) or email == 'N/A' or email == '':
@@ -99,12 +143,12 @@ def analyze_skills(
         qualified_trainers = trainers_df[qualified_mask].copy()
         
         # Add manager information
-        if 'Manager Turing Email' in managers_df.columns:
-            manager_mapping = managers_df.groupby('Developer turing email')[
-                'Manager Turing Email'
+        if 'manager turing email' in managers_df.columns:
+            manager_mapping = managers_df.groupby('developer turing email')[
+                'manager turing email'
             ].first().to_dict()
             qualified_trainers['Manager_Turing_Email'] = qualified_trainers[
-                'Developer turing email'
+                'developer turing email'
             ].map(manager_mapping)
         
         # Calculate average skill score
@@ -156,11 +200,12 @@ def main():
     # Load trainers data
     try:
         trainers_df = pd.read_csv('Current delivery workforce - Raw Data.csv')
+        trainers_df.columns = trainers_df.columns.str.strip()
         total_trainers = len(trainers_df)
     except Exception as e:
         st.error(f"Error loading trainers data: {str(e)}")
-        st.error("Please ensure 'trainers_data.csv' is present in the repository.")
-        return
+        st.error("Please ensure 'Current delivery workforce - Raw Data.csv' is present in the repository.")
+        st.stop()
 
     st.write("""
     This tool analyzes trainer skills and identifies qualified trainers who possess ALL
@@ -179,15 +224,17 @@ def main():
     
     if managers_file is not None:
         try:
+            # Read the managers file
             managers_df = pd.read_csv(managers_file)
             
-            # Validate required columns
-            required_manager_cols = ['Developer turing email', 'Manager Turing Email']
-            if not all(col in managers_df.columns for col in required_manager_cols):
-                st.error("Managers file missing required columns!")
-                return
-            
-            st.success("✅ Managers file uploaded successfully!")
+            # Validate and clean the managers DataFrame
+            try:
+                managers_df = validate_and_clean_managers_df(managers_df)
+                st.success("✅ Managers file uploaded and validated successfully!")
+            except ValueError as ve:
+                st.error(f"Error in managers file: {str(ve)}")
+                st.error("Please ensure the file contains the required columns.")
+                st.stop()
             
             # Configuration section
             st.header("2. Configure Analysis")
