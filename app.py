@@ -24,34 +24,33 @@ st.session_state.skill_variations = {
 
 # Helper Functions
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names by removing special prefixes, suffixes, and standardizing."""
+    """Clean column names by removing leading/trailing special characters and standardizing."""
     df.columns = (
         df.columns
-        .str.strip()
         .str.replace(r'^="', '', regex=True)  # Remove leading ="
         .str.replace(r'"$', '', regex=True)  # Remove trailing "
+        .str.strip()
         .str.lower()
         .str.replace(' ', '')
         .str.replace('_', '')
     )
     return df
 
+
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate managers DataFrame and map columns dynamically."""
     required_columns = {
-        'developer turing email': ['developer turing email', 'developerturingemail'],
-        'manager turing email': ['manager turing email', 'managerturingemail']
+        'developer turing email': ['developerturingemail'],
+        'manager turing email': ['managerturingemail']
     }
 
     # Clean column names
-    st.write("Raw columns:", df.columns.tolist())  # DEBUGGING
-    cleaned_columns = df.columns.str.lower().str.strip().str.replace(' ', '').str.replace('_', '')
-    st.write("Cleaned columns:", cleaned_columns.tolist())  # DEBUGGING
+    df = clean_column_names(df)
 
     column_mapping = {}
     for standard_col, variations in required_columns.items():
-        for col, col_cleaned in zip(df.columns, cleaned_columns):
-            if any(variation.replace(' ', '').replace('_', '') == col_cleaned for variation in variations):
+        for col in df.columns:
+            if col in variations:
                 column_mapping[col] = standard_col
                 break
 
@@ -60,6 +59,7 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         st.stop()
 
     return df.rename(columns=column_mapping)[list(required_columns.keys())]
+
 
 
 
