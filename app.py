@@ -36,8 +36,9 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     }
 
     # Clean column names
-    df_cleaned = clean_column_names(df)
-    cleaned_columns = df_cleaned.columns.str.lower().str.replace(' ', '').str.replace('_', '')
+    st.write("Raw columns:", df.columns.tolist())  # DEBUGGING
+    cleaned_columns = df.columns.str.lower().str.strip().str.replace(' ', '').str.replace('_', '')
+    st.write("Cleaned columns:", cleaned_columns.tolist())  # DEBUGGING
 
     column_mapping = {}
     for standard_col, variations in required_columns.items():
@@ -51,6 +52,7 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         st.stop()
 
     return df.rename(columns=column_mapping)[list(required_columns.keys())]
+
 
 
 def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[float]:
