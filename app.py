@@ -48,20 +48,81 @@ if 'skill_variations' not in st.session_state:
 
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate and clean managers DataFrame."""
-    # Clean column names
-    df.columns = df.columns.str.strip().str.lower()
+    # Debug: Show original columns
+    st.write("Original columns in managers file:", df.columns.tolist())
     
-    # Validate required columns
-    required_cols = ['manager turing email', 'developer turing email']
-    missing_cols = [col for col in required_cols if col not in df.columns]
+    # Clean column names more thoroughly
+    df.columns = df.columns.str.replace('="', '')\
+                         .str.replace('"', '')\
+                         .str.replace(' ', ' ')\  # Replace special spaces
+                         .str.strip()\
+                         .str.lower()
     
-    if missing_cols:
+    # Debug: Show cleaned columns
+    st.write("Cleaned columns in managers file:", df.columns.tolist())
+    
+    # Define all possible variations of column names
+    developer_email_variants = [
+        'developer turing email',
+        'developerturingemail',
+        'developer_turing_email',
+        'developer email',
+        'developer turing emails',
+        'Developer turing email'  # Add exact match from your file
+    ]
+    
+    manager_email_variants = [
+        'manager turing email',
+        'managerturingemail',
+        'manager_turing_email',
+        'manager email',
+        'Manager Turing Email',  # Add exact match from your file
+        'manager turing emails'
+    ]
+    
+    # Find matching columns
+    dev_email_col = None
+    manager_email_col = None
+    
+    # Debug: Check each variant
+    st.write("Checking for these developer email variations:", developer_email_variants)
+    st.write("Checking for these manager email variations:", manager_email_variants)
+    
+    for variant in developer_email_variants:
+        if variant.lower() in df.columns:
+            dev_email_col = variant.lower()
+            break
+    
+    for variant in manager_email_variants:
+        if variant.lower() in df.columns:
+            manager_email_col = variant.lower()
+            break
+    
+    # Debug: Show found columns
+    st.write("Found developer email column:", dev_email_col)
+    st.write("Found manager email column:", manager_email_col)
+    
+    if not dev_email_col or not manager_email_col:
+        missing_cols = []
+        if not dev_email_col:
+            missing_cols.append("Developer Turing Email")
+        if not manager_email_col:
+            missing_cols.append("Manager Turing Email")
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
     
-    # Clean email columns
-    for col in required_cols:
-        df[col] = df[col].astype(str).str.strip()
-        df[col] = df[col].str.replace('="', '').str.replace('"', '')
+    # Rename to standard format
+    column_mapping = {
+        dev_email_col: 'developer turing email',
+        manager_email_col: 'manager turing email'
+    }
+    df = df.rename(columns=column_mapping)
+    
+    # Clean data
+    for col in ['developer turing email', 'manager turing email']:
+        df[col] = df[col].astype(str)\
+                        .str.replace('="', '')\
+                        .str.replace('"', '')\
+                        .str.strip()
     
     # Remove invalid rows
     df = df[
