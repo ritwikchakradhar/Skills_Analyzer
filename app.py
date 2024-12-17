@@ -24,16 +24,17 @@ st.session_state.skill_variations = {
 
 # Helper Functions
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names by stripping special characters, quotes, and formatting."""
+    """Clean column names by removing special prefixes, suffixes, and standardizing."""
     df.columns = (
-        df.columns.str.replace(r'^="|"$', '', regex=True)  # Remove leading = and trailing "
-                 .str.strip()
-                 .str.lower()
-                 .str.replace(' ', '')
-                 .str.replace('_', '')
+        df.columns
+        .str.strip()
+        .str.replace(r'^="', '', regex=True)  # Remove leading ="
+        .str.replace(r'"$', '', regex=True)  # Remove trailing "
+        .str.lower()
+        .str.replace(' ', '')
+        .str.replace('_', '')
     )
     return df
-
 
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate managers DataFrame and map columns dynamically."""
