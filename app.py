@@ -24,7 +24,7 @@ st.session_state.skill_variations = {
 
 # Helper Functions
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column names by removing leading/trailing special characters and standardizing."""
+    """Clean column names by removing special characters, spaces, and formatting."""
     df.columns = (
         df.columns
         .str.replace(r'^="', '', regex=True)  # Remove leading ="
@@ -36,7 +36,6 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate managers DataFrame and map columns dynamically."""
     required_columns = {
@@ -44,7 +43,6 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         'manager turing email': ['managerturingemail']
     }
 
-    # Clean column names
     df = clean_column_names(df)
 
     column_mapping = {}
@@ -55,13 +53,10 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
                 break
 
     if len(column_mapping) < len(required_columns):
-        st.error(f"⚠️ Missing required columns. Required columns: {list(required_columns.keys())}")
+        st.error("❌ Missing required columns in the managers file. Please check your upload.")
         st.stop()
 
     return df.rename(columns=column_mapping)[list(required_columns.keys())]
-
-
-
 
 def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[float]:
     """Extract skill score for variations."""
@@ -80,25 +75,44 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
 def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
     """Analyze trainers against skills and scores."""
     trainers_df = clean_column_names(trainers_df)
-    trainers_df['primary skills'] = trainers_df['primary skills'].fillna('')
-    trainers_df['secondary skills'] = trainers_df['secondary skills'].fillna('')
+    skill_columns = {
+        'primary skills': ['primaryskills', 'primary skills'],
+        'secondary skills': ['secondaryskills', 'secondary skills']
+    }
+
+    # Match skill-related columns dynamically
+    column_mapping = {}
+    for standard_name, variations in skill_columns.items():
+        for col in trainers_df.columns:
+            if col in variations:
+                column_mapping[standard_name] = col
+                break
+
+    if len(column_mapping) < 2:
+        st.error("❌ Missing required skill columns ('primary skills' or 'secondary skills') in the trainer file.")
+        st.stop()
+
+    primary_col, secondary_col = column_mapping['primary skills'], column_mapping['secondary skills']
+    trainers_df[primary_col] = trainers_df[primary_col].fillna('')
+    trainers_df[secondary_col] = trainers_df[secondary_col].fillna('')
 
     skill_scores = {}
     qualified_mask = pd.Series(True, index=trainers_df.index)
     for skill in selected_skills:
         variations = st.session_state.skill_variations.get(skill, [skill])
-        primary_scores = trainers_df['primary skills'].apply(lambda x: extract_skill_score(x, variations))
-        secondary_scores = trainers_df['secondary skills'].apply(lambda x: extract_skill_score(x, variations))
+        primary_scores = trainers_df[primary_col].apply(lambda x: extract_skill_score(x, variations))
+        secondary_scores = trainers_df[secondary_col].apply(lambda x: extract_skill_score(x, variations))
         max_scores = pd.DataFrame({'primary': primary_scores, 'secondary': secondary_scores}).max(axis=1)
         skill_scores[f'{skill}_score'] = max_scores
         qualified_mask &= (max_scores >= min_score)
 
-    # Add manager mapping
     qualified_trainers = trainers_df[qualified_mask].copy()
     qualified_trainers = qualified_trainers.assign(**skill_scores)
-    if 'developer turing email' in managers_df.columns:
-        manager_map = managers_df.set_index('developer turing email')['manager turing email'].to_dict()
-        qualified_trainers['manager turing email'] = qualified_trainers['developer turing email'].map(manager_map)
+
+    # Add manager mapping
+    if 'developerturingemail' in managers_df.columns:
+        manager_map = managers_df.set_index('developerturingemail')['managerturingemail'].to_dict()
+        qualified_trainers['manager turing email'] = qualified_trainers['developerturingemail'].map(manager_map)
 
     return qualified_trainers
 
@@ -114,8 +128,7 @@ def main():
 
     # Load Static Trainer Data
     try:
-        trainers_df = pd.read_csv("Current delivery workforce - Raw Data.csv")
-        trainers_df = clean_column_names(trainers_df)
+        trainers_df = clean_column_names(pd.read_csv("Current delivery workforce - Sample Data.csv"))
         st.success("✅ Static trainer data loaded successfully!")
     except Exception as e:
         st.error(f"Error loading static trainer file: {e}")
