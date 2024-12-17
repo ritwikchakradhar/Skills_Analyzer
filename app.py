@@ -1,208 +1,252 @@
+import streamlit as st
 import pandas as pd
 import re
 from datetime import datetime
-from typing import Dict, List, Optional, Union, Set
-import logging
-from pathlib import Path
+import base64
+from typing import Dict, List, Optional
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+# Page config
+st.set_page_config(
+    page_title="Skills Analyzer",
+    page_icon="📊",
+    layout="wide"
 )
-logger = logging.getLogger(__name__)
 
-# Skill variations mapping - add more skills and variations as needed
-SKILL_VARIATIONS = {
-    'nodejs': ['node', 'nodejs', 'node.js', 'node-js', 'node js'],
-    'python': ['python', 'python3', 'python 3'],
-    'java': ['java', 'core java', 'java se'],
-    'kotlin': ['kotlin', 'kotlin-android', 'kotlin android'],
-    'react': ['react', 'reactjs', 'react.js', 'react js'],
-    'angular': ['angular', 'angularjs', 'angular.js', 'angular js'],
-    # Add more skills as needed
-}
+# Initialize session state for skill variations
+if 'skill_variations' not in st.session_state:
+    st.session_state.skill_variations = {
+        'nodejs': ['node', 'nodejs', 'node.js', 'node-js', 'node js'],
+        'python': ['python', 'python3', 'python 3'],
+        'java': ['java', 'core java', 'java se'],
+        'kotlin': ['kotlin', 'kotlin-android', 'kotlin android'],
+        'react': ['react', 'reactjs', 'react.js', 'react js'],
+        'angular': ['angular', 'angularjs', 'angular.js', 'angular js']
+    }
 
-class EmailValidator:
-    """Handles email validation logic."""
-    
-    @staticmethod
-    def is_valid_email(email: str) -> bool:
-        """Validate email format."""
-        if pd.isna(email) or email == 'N/A' or email == '':
-            return False
-        return bool(re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', str(email)))
+def validate_email(email: str) -> bool:
+    """Validate email format."""
+    if pd.isna(email) or email == 'N/A' or email == '':
+        return False
+    return bool(re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', str(email)))
 
-class SkillsAnalyzer:
-    """Generic skills analyzer that requires all specified skills to meet threshold."""
-    
-    def __init__(
-        self,
-        trainers_path: str,
-        managers_path: str,
-        minimum_score: float = 70,
-        business_lines: Optional[List[str]] = None,
-        skills_to_analyze: Optional[List[str]] = None,
-        skill_variations: Optional[Dict[str, List[str]]] = None
-    ):
-        """Initialize analyzer with paths and configuration."""
-        self.trainers_path = Path(trainers_path)
-        self.managers_path = Path(managers_path)
-        self.minimum_score = minimum_score
-        self.business_lines = business_lines
-        self.skills_to_analyze = skills_to_analyze or ['python', 'nodejs', 'java']
-        self.skill_variations = skill_variations or SKILL_VARIATIONS
-        self.validator = EmailValidator()
-        
-        # Create reverse mapping for skill variations
-        self.skill_mapping = {}
-        for main_skill, variations in self.skill_variations.items():
-            for variation in variations:
-                self.skill_mapping[variation.lower()] = main_skill
-
-    def _clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean quotes and special characters from DataFrame."""
-        df.columns = df.columns.str.replace('="', '').str.replace('"', '')
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                df[col] = df[col].str.replace('="', '').str.replace('"', '')
-        return df
-    
-    def _extract_skill_score(self, skills_str: str, skill_variations: Set[str]) -> Optional[float]:
-        """Extract skill score from skills string for any variation of the skill."""
-        if pd.isna(skills_str):
-            return None
-            
-        skills_str = skills_str.lower()
-        for variation in skill_variations:
-            pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
-            match = re.search(pattern, skills_str)
-            if match:
-                return float(match.group(1))
+def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[float]:
+    """Extract skill score from skills string."""
+    if pd.isna(skills_str):
         return None
+    
+    skills_str = skills_str.lower()
+    for variation in variations:
+        pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
+        match = re.search(pattern, skills_str, re.IGNORECASE)
+        if match:
+            return float(match.group(1))
+    return None
 
-    def _calculate_skill_scores(self, row: pd.Series) -> pd.Series:
-        """Calculate scores for all specified skills."""
-        results = {}
+def analyze_skills(
+    trainers_df: pd.DataFrame,
+    managers_df: pd.DataFrame,
+    selected_skills: List[str],
+    minimum_score: float,
+    business_lines: Optional[List[str]] = None
+) -> tuple[pd.DataFrame, Dict[str, int]]:
+    """Analyze skills and return qualified trainers."""
+    
+    # Filter business lines if specified
+    if business_lines:
+        trainers_df = trainers_df[trainers_df['Business line'].isin(business_lines)].copy()
+    
+    # Calculate scores for each skill
+    skill_scores = {}
+    qualified_mask = pd.Series(True, index=trainers_df.index)
+    skill_stats = {}
+    
+    for skill in selected_skills:
+        variations = st.session_state.skill_variations.get(skill, [skill])
         
-        for skill in self.skills_to_analyze:
-            variations = set(v.lower() for v in self.skill_variations.get(skill, [skill]))
-            
-            primary_score = self._extract_skill_score(str(row['Primary Skills']), variations)
-            secondary_score = self._extract_skill_score(str(row['Secondary Skills']), variations)
-            
-            results[f'{skill}_Primary_Score'] = primary_score
-            results[f'{skill}_Secondary_Score'] = secondary_score
-            results[f'{skill}_Max_Score'] = max(
-                filter(None, [primary_score, secondary_score]), 
-                default=None
-            )
-            
-        return pd.Series(results)
-
-    def analyze_and_export(self) -> str:
-        """Perform the analysis of trainers and export results."""
-        try:
-            # Read and validate input files
-            if not self.trainers_path.exists():
-                raise FileNotFoundError(f"Trainers file not found: {self.trainers_path}")
-            if not self.managers_path.exists():
-                raise FileNotFoundError(f"Managers file not found: {self.managers_path}")
-            
-            trainers_df = pd.read_csv(self.trainers_path)
-            managers_df = pd.read_csv(self.managers_path)
-            
-            # Clean managers data
-            managers_df = self._clean_dataframe(managers_df)
-            
-            # Create manager mapping
-            valid_managers_df = managers_df[
-                managers_df['Manager Turing Email'].apply(self.validator.is_valid_email)
-            ].copy()
-            manager_mapping = valid_managers_df.groupby('Developer turing email')[
-                'Manager Turing Email'
-            ].first().to_dict()
-            
-            # Filter for relevant business lines if specified
-            df_filtered = trainers_df
-            if self.business_lines:
-                df_filtered = trainers_df[
-                    trainers_df['Business line'].isin(self.business_lines)
-                ].copy()
-            
-            # Calculate skill scores
-            skill_scores = df_filtered.apply(self._calculate_skill_scores, axis=1)
-            df_filtered = pd.concat([df_filtered, skill_scores], axis=1)
-            
-            # Filter qualified trainers (must meet minimum score for ALL skills)
-            qualified_mask = pd.Series(True, index=df_filtered.index)
-            for skill in self.skills_to_analyze:
-                skill_mask = df_filtered[f'{skill}_Max_Score'] >= self.minimum_score
-                qualified_mask &= skill_mask
-                
-                # Log how many trainers have this skill at required level
-                logger.info(f"Trainers with {skill} >= {self.minimum_score}%: {skill_mask.sum()}")
-            
-            qualified_trainers = df_filtered[qualified_mask].copy()
-            
-            # Add manager information
-            qualified_trainers['Manager_Turing_Email'] = qualified_trainers[
-                'Developer turing email'
-            ].map(manager_mapping)
-            
-            # Sort by average of maximum scores across all skills
-            score_columns = [f'{skill}_Max_Score' for skill in self.skills_to_analyze]
-            qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1)
-            qualified_trainers = qualified_trainers.sort_values(
-                by='Average_Skill_Score',
-                ascending=False,
-                na_position='last'
-            )
-            
-            # Export results
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            skills_str = '_'.join(self.skills_to_analyze)
-            export_filename = f'qualified_trainers_all_{skills_str}_{timestamp}.csv'
-            qualified_trainers.to_csv(export_filename, index=False, encoding='utf-8')
-            
-            # Log results
-            logger.info("\nAnalysis Summary:")
-            logger.info(f"Total trainers analyzed: {len(trainers_df)}")
-            logger.info(f"Total qualified trainers (with ALL required skills): {len(qualified_trainers)}")
-            logger.info(f"Required skills: {', '.join(self.skills_to_analyze)}")
-            logger.info(f"Minimum score threshold: {self.minimum_score}%")
-            logger.info(f"Results exported to: {export_filename}")
-            
-            if len(qualified_trainers) > 0:
-                logger.info("\nTop qualified trainer scores:")
-                for _, row in qualified_trainers.head(1).iterrows():
-                    logger.info(f"Developer: {row['Developer']}")
-                    for skill in self.skills_to_analyze:
-                        logger.info(f"{skill}: {row[f'{skill}_Max_Score']}%")
-            
-            return export_filename
-            
-        except Exception as e:
-            logger.error(f"Error during analysis: {str(e)}")
-            raise
-
-def main():
-    """Main function to run the analysis."""
-    analyzer = SkillsAnalyzer(
-        trainers_path='/Users/ritwikchakradhar/Documents/Dev Mobility - Data/Current delivery workforce - Raw Data(10th Nov).csv',
-        managers_path='/Users/ritwikchakradhar/Documents/Dev Mobility - Data/Engagements-01-Dec-2024-to-31-Dec-2024_Updated.csv',
-        minimum_score=70,                        # Minimum skill score threshold
-        business_lines=['LLM', 'Services'],      # Business lines to include (optional)
-        skills_to_analyze=['python', 'nodejs'],  # Skills to analyze - trainers must have ALL these
-        skill_variations=SKILL_VARIATIONS        # Skill name variations mapping
+        # Calculate primary and secondary scores
+        primary_scores = trainers_df['Primary Skills'].apply(
+            lambda x: extract_skill_score(str(x), variations)
+        )
+        secondary_scores = trainers_df['Secondary Skills'].apply(
+            lambda x: extract_skill_score(str(x), variations)
+        )
+        
+        # Get maximum score
+        max_scores = pd.Series([
+            max(filter(None, [p, s]), default=None)
+            for p, s in zip(primary_scores, secondary_scores)
+        ])
+        
+        skill_scores[f'{skill}_Max_Score'] = max_scores
+        skill_mask = max_scores >= minimum_score
+        qualified_mask &= skill_mask
+        skill_stats[skill] = skill_mask.sum()
+    
+    # Add skill scores to DataFrame
+    for col, scores in skill_scores.items():
+        trainers_df[col] = scores
+    
+    # Get qualified trainers
+    qualified_trainers = trainers_df[qualified_mask].copy()
+    
+    # Add manager information
+    if 'Manager Turing Email' in managers_df.columns:
+        manager_mapping = managers_df.groupby('Developer turing email')[
+            'Manager Turing Email'
+        ].first().to_dict()
+        qualified_trainers['Manager_Turing_Email'] = qualified_trainers[
+            'Developer turing email'
+        ].map(manager_mapping)
+    
+    # Calculate average skill score
+    score_columns = [f'{skill}_Max_Score' for skill in selected_skills]
+    qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1)
+    
+    # Sort by average score
+    qualified_trainers = qualified_trainers.sort_values(
+        by='Average_Skill_Score',
+        ascending=False,
+        na_position='last'
     )
     
-    try:
-        export_path = analyzer.analyze_and_export()
-        print(f"\nAnalysis completed successfully. Results saved to: {export_path}")
-    except Exception as e:
-        print(f"Analysis failed: {str(e)}")
-        raise
+    return qualified_trainers, skill_stats
+
+def get_download_link(df: pd.DataFrame, filename: str) -> str:
+    """Create download link for DataFrame."""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download Results CSV</a>'
+    return href
+
+def main():
+    st.title("Skills Analyzer")
+    
+    st.write("""
+    Upload your trainers and managers data to analyze skills and find qualified trainers.
+    Trainers must meet the minimum score threshold in ALL selected skills to qualify.
+    """)
+    
+    # File upload section
+    st.header("1. Upload Data Files")
+    
+    st.info("""
+    **Required File Format:**
+    - Trainers CSV must have: 'Primary Skills', 'Secondary Skills', 'Business line' columns
+    - Managers CSV must have: 'Developer turing email', 'Manager Turing Email' columns
+    """)
+    
+    trainers_file = st.file_uploader("Upload Trainers CSV", type='csv')
+    managers_file = st.file_uploader("Upload Managers CSV", type='csv')
+    
+    if trainers_file and managers_file:
+        try:
+            # Read CSV files
+            trainers_df = pd.read_csv(trainers_file)
+            managers_df = pd.read_csv(managers_file)
+            
+            # Validate required columns
+            required_trainer_cols = ['Primary Skills', 'Secondary Skills', 'Business line']
+            required_manager_cols = ['Developer turing email', 'Manager Turing Email']
+            
+            if not all(col in trainers_df.columns for col in required_trainer_cols):
+                st.error("Trainers file missing required columns!")
+                return
+                
+            if not all(col in managers_df.columns for col in required_manager_cols):
+                st.error("Managers file missing required columns!")
+                return
+            
+            st.success("Files uploaded successfully!")
+            
+            # Configuration section
+            st.header("2. Configure Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                business_lines = sorted(trainers_df['Business line'].unique().tolist())
+                selected_lines = st.multiselect(
+                    "Select Business Lines",
+                    options=business_lines,
+                    default=['LLM', 'Services'] if 'LLM' in business_lines else None
+                )
+                
+                minimum_score = st.slider(
+                    "Minimum Skill Score Required",
+                    min_value=0,
+                    max_value=100,
+                    value=70,
+                    step=5
+                )
+            
+            with col2:
+                available_skills = sorted(st.session_state.skill_variations.keys())
+                selected_skills = st.multiselect(
+                    "Select Required Skills",
+                    options=available_skills,
+                    default=['python', 'nodejs'] if 'python' in available_skills else None,
+                    help="Trainers must have ALL these skills"
+                )
+            
+            # Skill variations editor
+            if st.checkbox("Edit Skill Variations"):
+                st.subheader("Edit Skill Name Variations")
+                for skill in selected_skills:
+                    current_variations = ', '.join(st.session_state.skill_variations.get(skill, []))
+                    new_variations = st.text_input(f"Variations for {skill}", value=current_variations)
+                    if new_variations:
+                        st.session_state.skill_variations[skill] = [
+                            v.strip() for v in new_variations.split(',')
+                        ]
+            
+            # Analysis button
+            if st.button("Run Analysis", type="primary"):
+                if not selected_skills:
+                    st.warning("Please select at least one skill to analyze.")
+                    return
+                
+                with st.spinner("Analyzing data..."):
+                    qualified_trainers, skill_stats = analyze_skills(
+                        trainers_df=trainers_df,
+                        managers_df=managers_df,
+                        selected_skills=selected_skills,
+                        minimum_score=minimum_score,
+                        business_lines=selected_lines
+                    )
+                
+                # Display results
+                st.header("3. Results")
+                
+                # Summary metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Trainers", len(trainers_df))
+                with col2:
+                    st.metric("Qualified Trainers", len(qualified_trainers))
+                with col3:
+                    rate = (len(qualified_trainers) / len(trainers_df) * 100) if len(trainers_df) > 0 else 0
+                    st.metric("Qualification Rate", f"{rate:.1f}%")
+                
+                # Skill statistics
+                st.subheader("Skill-wise Statistics")
+                for skill, count in skill_stats.items():
+                    st.metric(f"{skill.title()}", count)
+                
+                # Results table
+                if not qualified_trainers.empty:
+                    st.subheader("Qualified Trainers")
+                    st.dataframe(qualified_trainers)
+                    
+                    # Download link
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f'qualified_trainers_{timestamp}.csv'
+                    st.markdown(get_download_link(qualified_trainers, filename), unsafe_allow_html=True)
+                else:
+                    st.warning("No trainers found matching all criteria.")
+                
+        except Exception as e:
+            st.error(f"Error processing files: {str(e)}")
+            st.error("Please check your file format and try again.")
 
 if __name__ == "__main__":
     main()
