@@ -128,7 +128,7 @@ def main():
 
     # Load Static Trainer Data
     try:
-        trainers_df = clean_column_names(pd.read_csv("Current delivery workforce - Sample Data.csv"))
+        trainers_df = clean_column_names(pd.read_csv("Current delivery workforce - Raw Data.csv"))
         st.success("✅ Static trainer data loaded successfully!")
     except Exception as e:
         st.error(f"Error loading static trainer file: {e}")
