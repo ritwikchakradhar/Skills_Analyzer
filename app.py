@@ -139,16 +139,16 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
     if pd.isna(skills_str) or skills_str == 'nan' or not skills_str:
         return None
     
-    skills_str = str(skills_str).lower()
-    for variation in variations:
-        pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
-        match = re.search(pattern, skills_str, re.IGNORECASE)
-        if match:
-            try:
+    try:
+        skills_str = str(skills_str).lower()
+        for variation in variations:
+            pattern = fr'{variation}\s*-\s*(\d+\.?\d*)%'
+            match = re.search(pattern, skills_str, re.IGNORECASE)
+            if match:
                 return float(match.group(1))
-            except ValueError:
-                continue
-    return None
+        return None
+    except Exception:
+        return None
 
 def analyze_skills(
     trainers_df: pd.DataFrame,
@@ -159,10 +159,18 @@ def analyze_skills(
 ) -> tuple[pd.DataFrame, Dict[str, int]]:
     """Analyze skills and return qualified trainers."""
     try:
-        # Filter business lines
+        # Create a copy to avoid modifying original
+        trainers_df = trainers_df.copy()
+        
+        # Ensure skill columns are strings
+        trainers_df['Primary Skills'] = trainers_df['Primary Skills'].fillna('').astype(str)
+        trainers_df['Secondary Skills'] = trainers_df['Secondary Skills'].fillna('').astype(str)
+        
+        # Filter business lines if specified
         if business_lines:
             trainers_df = trainers_df[trainers_df['Business line'].isin(business_lines)].copy()
         
+        # Calculate scores for each skill
         skill_scores = {}
         qualified_mask = pd.Series(True, index=trainers_df.index)
         skill_stats = {}
@@ -170,26 +178,31 @@ def analyze_skills(
         for skill in selected_skills:
             variations = st.session_state.skill_variations.get(skill, [skill])
             
-            # Calculate scores
-            primary_scores = trainers_df['Primary Skills'].apply(
-                lambda x: extract_skill_score(str(x), variations)
-            )
-            secondary_scores = trainers_df['Secondary Skills'].apply(
-                lambda x: extract_skill_score(str(x), variations)
-            )
+            # Extract scores
+            primary_scores = pd.Series([
+                extract_skill_score(str(x), variations) 
+                for x in trainers_df['Primary Skills']
+            ])
+            secondary_scores = pd.Series([
+                extract_skill_score(str(x), variations) 
+                for x in trainers_df['Secondary Skills']
+            ])
             
-            # Convert to numeric
+            # Convert to numeric, replacing None with NaN
             primary_scores = pd.to_numeric(primary_scores, errors='coerce')
             secondary_scores = pd.to_numeric(secondary_scores, errors='coerce')
             
-            # Get maximum score
+            # Calculate max score
             max_scores = pd.DataFrame({
                 'primary': primary_scores,
                 'secondary': secondary_scores
-            }).max(axis=1)
+            }).max(axis=1, skipna=True)
             
+            # Store scores
             skill_scores[f'{skill}_Max_Score'] = max_scores
-            skill_mask = max_scores >= minimum_score
+            
+            # Create mask for this skill (handling NaN values)
+            skill_mask = (max_scores.fillna(0) >= minimum_score)
             qualified_mask &= skill_mask
             skill_stats[skill] = skill_mask.sum()
         
@@ -201,24 +214,30 @@ def analyze_skills(
         qualified_trainers = trainers_df[qualified_mask].copy()
         
         # Add manager information
-        manager_mapping = managers_df.groupby('developer turing email')['manager turing email'].first().to_dict()
-        qualified_trainers['Manager_Turing_Email'] = qualified_trainers['developer turing email'].map(manager_mapping)
+        if len(qualified_trainers) > 0:
+            manager_mapping = managers_df.set_index('developer turing email')['manager turing email'].to_dict()
+            qualified_trainers['Manager_Turing_Email'] = qualified_trainers['developer turing email'].map(manager_mapping)
         
-        # Calculate average score
-        score_columns = [f'{skill}_Max_Score' for skill in selected_skills]
-        qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1)
-        
-        # Sort results
-        qualified_trainers = qualified_trainers.sort_values(
-            by='Average_Skill_Score',
-            ascending=False,
-            na_position='last'
-        )
+        # Calculate average skill score
+        if len(qualified_trainers) > 0:
+            score_columns = [f'{skill}_Max_Score' for skill in selected_skills]
+            qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1)
+            
+            # Sort by average score
+            qualified_trainers = qualified_trainers.sort_values(
+                by='Average_Skill_Score',
+                ascending=False,
+                na_position='last'
+            )
         
         return qualified_trainers, skill_stats
         
     except Exception as e:
         st.error(f"Error in analysis: {str(e)}")
+        st.write("Debug info:")
+        st.write("Selected skills:", selected_skills)
+        st.write("Minimum score:", minimum_score)
+        st.write("Business lines:", business_lines)
         return pd.DataFrame(), {}
 
 def get_download_link(df: pd.DataFrame, filename: str) -> str:
