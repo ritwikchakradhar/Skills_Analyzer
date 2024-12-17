@@ -31,32 +31,27 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate managers DataFrame and map columns dynamically."""
     required_columns = {
-        'developer turing email': ['developer turing email', 'developer_turing_email', 'developer turing email '],
-        'manager turing email': ['manager turing email', 'manager_turing_email', 'manager turing email ']
+        'developer turing email': ['developer turing email', 'developerturingemail'],
+        'manager turing email': ['manager turing email', 'managerturingemail']
     }
 
-    # Clean and standardize column names
-    df = clean_column_names(df)
-    cleaned_columns = df.columns.str.lower().str.replace(' ', '').str.replace('_', '')
+    # Clean column names
+    df_cleaned = clean_column_names(df)
+    cleaned_columns = df_cleaned.columns.str.lower().str.replace(' ', '').str.replace('_', '')
 
     column_mapping = {}
     for standard_col, variations in required_columns.items():
-        found = False
-        for variation in variations:
-            variation_cleaned = variation.lower().replace(' ', '').replace('_', '')
-            for col, col_cleaned in zip(df.columns, cleaned_columns):
-                if col_cleaned == variation_cleaned:
-                    column_mapping[col] = standard_col
-                    found = True
-                    break
-            if found:
+        for col, col_cleaned in zip(df.columns, cleaned_columns):
+            if any(variation.replace(' ', '').replace('_', '') == col_cleaned for variation in variations):
+                column_mapping[col] = standard_col
                 break
-        if not found:
-            st.error(f"⚠️ Missing required column: '{standard_col}'. Please check your file.")
-            st.stop()
 
-    # Rename the identified columns
-    return df.rename(columns=column_mapping)[list(column_mapping.values())]
+    if len(column_mapping) < len(required_columns):
+        st.error(f"⚠️ Missing required columns. Required columns: {list(required_columns.keys())}")
+        st.stop()
+
+    return df.rename(columns=column_mapping)[list(required_columns.keys())]
+
 
 def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[float]:
     """Extract skill score for variations."""
