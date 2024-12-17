@@ -54,7 +54,6 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     # Clean column names more thoroughly
     df.columns = df.columns.str.replace('="', '')\
                          .str.replace('"', '')\
-                         .str.replace(' ', ' ')\  # Replace special spaces
                          .str.strip()\
                          .str.lower()
     
@@ -68,7 +67,7 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         'developer_turing_email',
         'developer email',
         'developer turing emails',
-        'Developer turing email'  # Add exact match from your file
+        'developer turing mail'
     ]
     
     manager_email_variants = [
@@ -76,31 +75,28 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         'managerturingemail',
         'manager_turing_email',
         'manager email',
-        'Manager Turing Email',  # Add exact match from your file
-        'manager turing emails'
+        'manager turing emails',
+        'manager turing mail'
     ]
     
     # Find matching columns
     dev_email_col = None
     manager_email_col = None
     
-    # Debug: Check each variant
-    st.write("Checking for these developer email variations:", developer_email_variants)
-    st.write("Checking for these manager email variations:", manager_email_variants)
+    # Debug: Show current columns for matching
+    st.write("Looking for developer email column in:", df.columns.tolist())
     
     for variant in developer_email_variants:
         if variant.lower() in df.columns:
             dev_email_col = variant.lower()
+            st.write(f"Found developer email column: {variant.lower()}")
             break
     
     for variant in manager_email_variants:
         if variant.lower() in df.columns:
             manager_email_col = variant.lower()
+            st.write(f"Found manager email column: {variant.lower()}")
             break
-    
-    # Debug: Show found columns
-    st.write("Found developer email column:", dev_email_col)
-    st.write("Found manager email column:", manager_email_col)
     
     if not dev_email_col or not manager_email_col:
         missing_cols = []
@@ -131,6 +127,10 @@ def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
         (df['manager turing email'] != 'nan') &
         (df['manager turing email'] != '')
     ]
+    
+    # Debug: Show final columns
+    st.write("Final columns after cleaning:", df.columns.tolist())
+    st.write(f"Found {len(df)} valid manager assignments")
     
     return df
 
