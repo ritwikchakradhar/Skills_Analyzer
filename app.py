@@ -16,10 +16,10 @@ st.set_page_config(
 if 'skill_variations' not in st.session_state:
     st.session_state.skill_variations = {
         'nodejs': ['node', 'nodejs', 'node.js', 'node-js', 'node js'],
-        'python': ['python', 'python3', 'python 3'],
+        'python': ['python', 'python3', 'python 3', 'python(django)', 'python automation', 'python security automation'],
         'java': ['java', 'core java', 'java se'],
         'kotlin': ['kotlin', 'kotlin-android', 'kotlin android'],
-        'react': ['react', 'reactjs', 'react.js', 'react js'],
+        'react': ['react', 'reactjs', 'react.js', 'react js', 'react hooks'],
         'angular': ['angular', 'angularjs', 'angular.js', 'angular js'],
         'typescript': ['typescript', 'ts'],
         'javascript': ['javascript', 'js', 'es6'],
@@ -27,31 +27,81 @@ if 'skill_variations' not in st.session_state:
         'rust': ['rust', 'rustlang'],
         'scala': ['scala'],
         'ruby': ['ruby', 'ruby on rails', 'rails'],
-        'php': ['php'],
+        'php': ['php', 'php/mysql'],
         'csharp': ['c#', 'csharp', 'c-sharp'],
-        'cplusplus': ['c++', 'cpp']
+        'cplusplus': ['c++', 'cpp', 'visual c++']
     }
+
+def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean column names removing special characters and standardizing format."""
+    df = df.copy()
+    df.columns = df.columns.str.replace('="', '')\
+                         .str.replace('"', '')\
+                         .str.replace('\n', ' ')\
+                         .str.strip()\
+                         .str.lower()
+    return df
 
 def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate and clean managers DataFrame."""
-    df.columns = df.columns.str.strip().str.lower()
+    # Show original columns for debugging
+    st.write("Original columns in managers file:", list(df.columns))
     
-    required_cols = ['manager turing email', 'developer turing email']
-    missing_cols = [col for col in required_cols if col not in df.columns]
+    # Clean column names
+    df = clean_column_names(df)
+    st.write("Cleaned columns:", list(df.columns))
     
-    if missing_cols:
-        raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+    # Expected column names and their variations
+    email_columns = {
+        'developer turing email': [
+            'developer turing email',
+            'developerturingemail',
+            'developer_turing_email',
+            'developer email',
+            'turing email'
+        ],
+        'manager turing email': [
+            'manager turing email',
+            'managerturingemail',
+            'manager_turing_email',
+            'manager email'
+        ]
+    }
     
-    for col in required_cols:
-        df[col] = df[col].astype(str).str.strip()
-        df[col] = df[col].str.replace('="', '').str.replace('"', '')
+    # Find matching columns
+    column_mapping = {}
+    for standard_name, variations in email_columns.items():
+        found = False
+        for variant in variations:
+            matching_cols = [col for col in df.columns if variant in col.lower().replace(' ', '')]
+            if matching_cols:
+                column_mapping[matching_cols[0]] = standard_name
+                found = True
+                break
+        if not found:
+            raise ValueError(f"Could not find a column matching {standard_name}")
     
+    # Rename and clean columns
+    df = df.rename(columns=column_mapping)
+    
+    # Clean email values
+    for col in ['developer turing email', 'manager turing email']:
+        df[col] = df[col].astype(str)\
+                        .str.replace('="', '')\
+                        .str.replace('"', '')\
+                        .str.strip()
+    
+    # Remove invalid rows
     df = df[
         df['manager turing email'].notna() & 
         (df['manager turing email'] != 'N/A') &
         (df['manager turing email'] != 'nan') &
         (df['manager turing email'] != '')
     ]
+    
+    st.write(f"Found {len(df)} valid manager assignments")
+    st.write("Sample of processed data:")
+    st.write(df[['developer turing email', 'manager turing email']].head())
     
     return df
 
@@ -64,6 +114,7 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
         skills_str = str(skills_str).lower()
         max_score = None
         
+        # Split by lines if multiline
         skills_list = [s.strip() for s in skills_str.split('\n') if s.strip()]
         if not skills_list:
             skills_list = [skills_str]
@@ -94,32 +145,40 @@ def analyze_skills(
 ) -> tuple[pd.DataFrame, Dict[str, int]]:
     """Analyze skills and return qualified trainers."""
     try:
+        # Create working copy and clean data
         trainers_df = trainers_df.copy()
+        trainers_df = clean_column_names(trainers_df)
         minimum_score = float(minimum_score)
         
-        trainers_df['Primary Skills'] = trainers_df['Primary Skills'].fillna('').astype(str)
-        trainers_df['Secondary Skills'] = trainers_df['Secondary Skills'].fillna('').astype(str)
+        # Clean skills columns
+        trainers_df['primary skills'] = trainers_df['primary skills'].fillna('').astype(str)
+        trainers_df['secondary skills'] = trainers_df['secondary skills'].fillna('').astype(str)
         
+        # Filter business lines
         if business_lines:
-            trainers_df = trainers_df[trainers_df['Business line'].isin(business_lines)].copy()
+            trainers_df = trainers_df[trainers_df['business line'].isin(business_lines)].copy()
         
         skill_scores = {}
         qualified_mask = pd.Series(True, index=trainers_df.index)
         skill_stats = {}
         
+        # Process each skill
         for skill in selected_skills:
             variations = st.session_state.skill_variations.get(skill, [skill])
             
+            # Calculate scores
             primary_scores = pd.Series([
-                extract_skill_score(str(x), variations) for x in trainers_df['Primary Skills']
+                extract_skill_score(str(x), variations) for x in trainers_df['primary skills']
             ])
             secondary_scores = pd.Series([
-                extract_skill_score(str(x), variations) for x in trainers_df['Secondary Skills']
+                extract_skill_score(str(x), variations) for x in trainers_df['secondary skills']
             ])
             
+            # Convert to numeric
             primary_scores = pd.to_numeric(primary_scores, errors='coerce')
             secondary_scores = pd.to_numeric(secondary_scores, errors='coerce')
             
+            # Get maximum score
             max_scores = pd.DataFrame({
                 'primary': primary_scores,
                 'secondary': secondary_scores
@@ -130,18 +189,23 @@ def analyze_skills(
             qualified_mask &= skill_mask
             skill_stats[skill] = skill_mask.sum()
         
+        # Get qualified trainers
         qualified_trainers = trainers_df[qualified_mask].copy()
         
         if len(qualified_trainers) > 0:
+            # Add skill scores
             for col, scores in skill_scores.items():
                 qualified_trainers[col] = scores.round(1)
             
+            # Add manager information
             manager_mapping = managers_df.set_index('developer turing email')['manager turing email'].to_dict()
             qualified_trainers['Manager_Turing_Email'] = qualified_trainers['developer turing email'].map(manager_mapping)
             
+            # Calculate average score
             score_columns = [f'{skill}_Max_Score' for skill in selected_skills]
             qualified_trainers['Average_Skill_Score'] = qualified_trainers[score_columns].mean(axis=1).round(1)
             
+            # Sort results
             qualified_trainers = qualified_trainers.sort_values(
                 by='Average_Skill_Score',
                 ascending=False,
@@ -183,6 +247,7 @@ def main():
     
     try:
         trainers_df = pd.read_csv('Current delivery workforce - Raw Data.csv')
+        trainers_df = clean_column_names(trainers_df)
         
         st.write("""
         Upload managers data file to analyze skills and find qualified trainers.
@@ -212,7 +277,7 @@ def main():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    business_lines = sorted(trainers_df['Business line'].unique().tolist())
+                    business_lines = sorted(trainers_df['business line'].unique().tolist())
                     selected_lines = st.multiselect(
                         "Select Business Lines",
                         options=business_lines,
@@ -286,8 +351,8 @@ def main():
                         st.subheader("Qualified Trainers")
                         
                         display_columns = [
-                            'Developer', 'Developer turing email', 'Manager_Turing_Email',
-                            'Business line', 'Average_Skill_Score'
+                            'developer', 'developer turing email', 'Manager_Turing_Email',
+                            'business line', 'Average_Skill_Score'
                         ] + [f'{skill}_Max_Score' for skill in selected_skills]
                         
                         st.dataframe(
