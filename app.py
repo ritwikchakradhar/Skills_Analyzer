@@ -34,12 +34,32 @@ if 'skill_variations' not in st.session_state:
 
 def validate_and_clean_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     """Validate and clean managers DataFrame columns."""
-    # Clean column names: remove quotes, spaces, and convert to lowercase
-    df.columns = df.columns.str.replace('="', '').str.replace('"', '').str.strip().str.lower()
+    # Clean column names: remove quotes, spaces, tabs and convert to lowercase
+    df.columns = df.columns.str.replace('="', '')\
+                         .str.replace('"', '')\
+                         .str.replace('\t', ' ')\
+                         .str.strip()\
+                         .str.lower()
     
     # List of possible variations of required column names
-    developer_email_variants = ['developer turing email', 'developerturingemail', 'developer_turing_email', 'developer email']
-    manager_email_variants = ['manager turing email', 'managerturingemail', 'manager_turing_email', 'manager email']
+    developer_email_variants = [
+        'developer turing email', 
+        'developerturingemail', 
+        'developer_turing_email', 
+        'developer email',
+        'developer turing mail'
+    ]
+    
+    manager_email_variants = [
+        'manager turing email', 
+        'managerturingemail', 
+        'manager_turing_email', 
+        'manager email',
+        'manager turing mail'
+    ]
+    
+    # Print available columns for debugging
+    st.write("Available columns in the file:", df.columns.tolist())
     
     # Check for developer email column
     dev_email_col = None
@@ -72,7 +92,10 @@ def validate_and_clean_managers_df(df: pd.DataFrame) -> pd.DataFrame:
     
     # Clean data in the columns
     for col in ['developer turing email', 'manager turing email']:
-        df[col] = df[col].str.replace('="', '').str.replace('"', '').str.strip()
+        df[col] = df[col].str.replace('="', '')\
+                        .str.replace('"', '')\
+                        .str.replace('\t', '')\
+                        .str.strip()
     
     return df
 
