@@ -155,7 +155,7 @@ def main():
     
     # Load trainers data
     try:
-        trainers_df = pd.read_csv('trainers_data.csv')
+        trainers_df = pd.read_csv('Current delivery workforce - Raw Data.csv')
         total_trainers = len(trainers_df)
     except Exception as e:
         st.error(f"Error loading trainers data: {str(e)}")
