@@ -37,8 +37,8 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-def map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dict[str, str]:
-    """Map required columns dynamically based on variations."""
+def validate_and_map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dict[str, str]:
+    """Validate and map required columns dynamically."""
     cleaned_columns = clean_column_names(df).columns
     column_mapping = {}
 
@@ -47,9 +47,12 @@ def map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dic
             if any(variation == col for variation in variations):
                 column_mapping[standard_name] = col
                 break
-        if standard_name not in column_mapping:
-            st.error(f"❌ Missing required column for '{standard_name}'. Please check your data.")
-            st.stop()
+
+    # Check if all required columns are found
+    missing_columns = [name for name in required_columns if name not in column_mapping]
+    if missing_columns:
+        st.error(f"❌ Missing required columns: {', '.join(missing_columns)}. Please check your file.")
+        st.stop()
 
     return column_mapping
 
@@ -89,9 +92,9 @@ def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
     qualified_trainers = qualified_trainers.assign(**skill_scores)
 
     # Add manager mapping
-    if 'developerturingemail' in managers_df.columns:
-        manager_map = managers_df.set_index('developerturingemail')['managerturingemail'].to_dict()
-        qualified_trainers['manager turing email'] = qualified_trainers['developerturingemail'].map(manager_map)
+    if 'developer_turing_email' in managers_df.columns:
+        manager_map = managers_df.set_index('developer_turing_email')['manager_turing_email'].to_dict()
+        qualified_trainers['manager_turing_email'] = qualified_trainers['developer_turing_email'].map(manager_map)
 
     return qualified_trainers
 
@@ -114,7 +117,7 @@ def main():
             'secondary_skills': ['secondaryskills', 'secondary_skills'],
             'developer_turing_email': ['developerturingemail', 'developer_email'],
         }
-        column_mapping = map_columns(trainers_df, required_columns)
+        column_mapping = validate_and_map_columns(trainers_df, required_columns)
         trainers_df = trainers_df.rename(columns=column_mapping)
         st.success("✅ Trainer data loaded and columns mapped successfully!")
     except Exception as e:
@@ -125,9 +128,18 @@ def main():
     st.header("1. Upload Managers Data")
     managers_file = st.file_uploader("Upload Managers CSV", type='csv')
     if managers_file is not None:
-        managers_df = pd.read_csv(managers_file)
-        managers_df = clean_column_names(managers_df)
-        st.success("✅ Managers file loaded successfully!")
+        try:
+            managers_df = pd.read_csv(managers_file)
+            required_columns = {
+                'developer_turing_email': ['developerturingemail', 'developer_email'],
+                'manager_turing_email': ['managerturingemail', 'manager_email']
+            }
+            column_mapping = validate_and_map_columns(managers_df, required_columns)
+            managers_df = managers_df.rename(columns=column_mapping)
+            st.success("✅ Managers file loaded and columns mapped successfully!")
+        except Exception as e:
+            st.error(f"Error processing managers file: {e}")
+            return
 
     # Configuration
     st.header("2. Configure Analysis")
