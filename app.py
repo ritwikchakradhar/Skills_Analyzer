@@ -115,15 +115,16 @@ def main():
     # Load Static Trainer Data
     try:
         trainers_df = pd.read_csv("Delivery Workforce - Data.csv")  # Ensure this file is in the same directory
+        st.write("Available columns in Trainer Data:", trainers_df.columns.tolist())  # Debugging: Show all columns
         required_columns = {
             'business_line': ['businessline', 'business_line'],
-            'primary_skills': ['primaryskills', 'primary_skills'],
-            'secondary_skills': ['secondaryskills', 'secondary_skills'],
+            'primary_skills': ['primaryskills', 'primary_skills', 'primary skills', 'primary-skill'],
+            'secondary_skills': ['secondaryskills', 'secondary_skills', 'secondary skills', 'secondary-skill'],
             'developer_turing_email': ['developerturingemail', 'developer_email'],
         }
         column_mapping = validate_and_map_columns(trainers_df, required_columns)
         trainers_df = trainers_df.rename(columns=column_mapping)
-        st.write("Mapped Columns:", column_mapping)  # Debugging: Show mapped columns
+        st.write("Mapped Columns (Trainers):", column_mapping)  # Debugging: Show mapped columns
         st.success("✅ Trainer data loaded and columns mapped successfully!")
     except Exception as e:
         st.error(f"Error loading trainer file: {e}")
@@ -135,6 +136,7 @@ def main():
     if managers_file is not None:
         try:
             managers_df = pd.read_csv(managers_file)
+            st.write("Available columns in Managers Data:", managers_df.columns.tolist())  # Debugging: Show all columns
             required_columns = {
                 'developer_turing_email': ['developerturingemail', 'developer_email'],
                 'manager_turing_email': ['managerturingemail', 'manager_email']
