@@ -38,12 +38,12 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 def validate_and_map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dict[str, str]:
     """Validate and map required columns dynamically."""
-    cleaned_columns = clean_column_names(df).columns
-    st.write("Cleaned Columns:", cleaned_columns.tolist())  # Debugging: Show cleaned columns
+    df = clean_column_names(df)
+    st.write("Cleaned Columns:", df.columns.tolist())  # Debugging: Show cleaned columns
     column_mapping = {}
 
     for standard_name, variations in required_columns.items():
-        for col in cleaned_columns:
+        for col in df.columns:
             if any(variation == col for variation in variations):
                 column_mapping[standard_name] = col
                 break
