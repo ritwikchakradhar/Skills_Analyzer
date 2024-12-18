@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 import base64
 from typing import Dict, List, Optional
+from fuzzywuzzy import process
 
 # Page config
 st.set_page_config(
@@ -36,27 +37,21 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-def validate_managers_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Validate managers DataFrame and map columns dynamically."""
-    required_columns = {
-        'developer turing email': ['developerturingemail'],
-        'manager turing email': ['managerturingemail']
-    }
-
-    df = clean_column_names(df)
-
+def map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dict[str, str]:
+    """Map required columns dynamically based on variations."""
+    cleaned_columns = clean_column_names(df).columns
     column_mapping = {}
-    for standard_col, variations in required_columns.items():
-        for col in df.columns:
-            if col in variations:
-                column_mapping[col] = standard_col
+
+    for standard_name, variations in required_columns.items():
+        for col in cleaned_columns:
+            if any(variation == col for variation in variations):
+                column_mapping[standard_name] = col
                 break
+        if standard_name not in column_mapping:
+            st.error(f"❌ Missing required column for '{standard_name}'. Please check your data.")
+            st.stop()
 
-    if len(column_mapping) < len(required_columns):
-        st.error("❌ Missing required columns in the managers file. Please check your upload.")
-        st.stop()
-
-    return df.rename(columns=column_mapping)[list(required_columns.keys())]
+    return column_mapping
 
 def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[float]:
     """Extract skill score for variations."""
@@ -74,25 +69,9 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
 
 def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
     """Analyze trainers against skills and scores."""
-    trainers_df = clean_column_names(trainers_df)
-    skill_columns = {
-        'primary skills': ['primaryskills', 'primary skills'],
-        'secondary skills': ['secondaryskills', 'secondary skills']
-    }
+    primary_col = 'primary_skills'
+    secondary_col = 'secondary_skills'
 
-    # Match skill-related columns dynamically
-    column_mapping = {}
-    for standard_name, variations in skill_columns.items():
-        for col in trainers_df.columns:
-            if col in variations:
-                column_mapping[standard_name] = col
-                break
-
-    if len(column_mapping) < 2:
-        st.error("❌ Missing required skill columns ('primary skills' or 'secondary skills') in the trainer file.")
-        st.stop()
-
-    primary_col, secondary_col = column_mapping['primary skills'], column_mapping['secondary skills']
     trainers_df[primary_col] = trainers_df[primary_col].fillna('')
     trainers_df[secondary_col] = trainers_df[secondary_col].fillna('')
 
@@ -128,10 +107,18 @@ def main():
 
     # Load Static Trainer Data
     try:
-        trainers_df = clean_column_names(pd.read_csv("Current delivery workforce - Raw Data.csv"))
-        st.success("✅ Static trainer data loaded successfully!")
+        trainers_df = pd.read_csv("Delivery Workforce - Data.csv")  # Ensure this file is in the same directory
+        required_columns = {
+            'business_line': ['businessline', 'business_line'],
+            'primary_skills': ['primaryskills', 'primary_skills'],
+            'secondary_skills': ['secondaryskills', 'secondary_skills'],
+            'developer_turing_email': ['developerturingemail', 'developer_email'],
+        }
+        column_mapping = map_columns(trainers_df, required_columns)
+        trainers_df = trainers_df.rename(columns=column_mapping)
+        st.success("✅ Trainer data loaded and columns mapped successfully!")
     except Exception as e:
-        st.error(f"Error loading static trainer file: {e}")
+        st.error(f"Error loading trainer file: {e}")
         return
 
     # Upload Managers Data
@@ -139,10 +126,12 @@ def main():
     managers_file = st.file_uploader("Upload Managers CSV", type='csv')
     if managers_file is not None:
         managers_df = pd.read_csv(managers_file)
-        managers_df = validate_managers_df(managers_df)
+        managers_df = clean_column_names(managers_df)
+        st.success("✅ Managers file loaded successfully!")
 
-        # Configuration
-        st.header("2. Configure Analysis")
+    # Configuration
+    st.header("2. Configure Analysis")
+    if managers_file:
         skills = list(st.session_state.skill_variations.keys())
         selected_skills = st.multiselect("Select Skills", options=skills, default=['python', 'nodejs'])
         min_score = st.slider("Minimum Skill Score (%)", 0, 100, 70, step=5)
