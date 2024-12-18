@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Skill variations for matching
+# Predefined Skill Variations
 st.session_state.skill_variations = {
     'nodejs': ['node', 'nodejs', 'node.js', 'node-js', 'node js'],
     'python': ['python', 'python3', 'python 3', 'python(django)', 'python automation', 'python security automation'],
@@ -73,10 +73,13 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
                 max_score = score
     return max_score
 
-def fuzzy_match_skills(user_skill: str, all_skills: List[str], threshold: int = 80) -> List[str]:
-    """Fuzzy match the user skill to available skills."""
-    matches = process.extract(user_skill, all_skills, limit=10)  # Get the top 10 matches
-    return [match for match, score in matches if score >= threshold]
+def match_user_skills(user_skill: str, primary_skills: pd.Series, secondary_skills: pd.Series) -> List[str]:
+    """Match user-provided skill dynamically in primary and secondary skills."""
+    matches = []
+    for col in [primary_skills, secondary_skills]:
+        col_matches = col.str.contains(user_skill, case=False, na=False)
+        matches.extend(col[col_matches].tolist())
+    return matches
 
 def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score):
     """Analyze trainers against skills and scores."""
@@ -102,16 +105,15 @@ def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_sc
     trainers_df[primary_col] = trainers_df[primary_col].fillna('')
     trainers_df[secondary_col] = trainers_df[secondary_col].fillna('')
 
-    # Include fuzzy matches for the user-provided skill
-    all_skill_variations = [
-        variation for variations in st.session_state.skill_variations.values() for variation in variations
-    ]
-    matched_skills = fuzzy_match_skills(user_skill, all_skill_variations) if user_skill else []
-    st.write(f"Fuzzy matches for '{user_skill}': {matched_skills}")
+    # Dynamically search for user-provided skill if entered
+    if user_skill:
+        user_matches = match_user_skills(user_skill, trainers_df[primary_col], trainers_df[secondary_col])
+        st.write(f"Matches for '{user_skill}' in skills data: {user_matches}")
+        st.session_state.skill_variations[user_skill] = [user_skill]  # Add the user skill to session state
 
     skill_scores = {}
     qualified_mask = pd.Series(True, index=trainers_df.index)
-    for skill in selected_skills + matched_skills:
+    for skill in selected_skills + ([user_skill] if user_skill else []):
         variations = st.session_state.skill_variations.get(skill, [skill])
         primary_scores = trainers_df[primary_col].apply(lambda x: extract_skill_score(x, variations))
         secondary_scores = trainers_df[secondary_col].apply(lambda x: extract_skill_score(x, variations))
@@ -158,7 +160,7 @@ def main():
         st.header("2. Configure Analysis")
         skills = list(st.session_state.skill_variations.keys())
         selected_skills = st.multiselect("Select Skills", options=skills, default=['python', 'nodejs'])
-        user_skill = st.text_input("Enter a custom skill name for analysis (natural text):")
+        user_skill = st.text_input("Enter a custom skill name for analysis (e.g., 'Go' for Golang):")
         min_score = st.slider("Minimum Skill Score (%)", 0, 100, 70, step=5)
 
         # Run Analysis
