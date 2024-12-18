@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 import base64
 from typing import Dict, List, Optional
-from fuzzywuzzy import process
 
 # Page config
 st.set_page_config(
@@ -72,6 +71,11 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
 
 def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
     """Analyze trainers against skills and scores."""
+    # Ensure required columns are present
+    if 'primary_skills' not in trainers_df.columns or 'secondary_skills' not in trainers_df.columns:
+        st.error("❌ Required columns ('primary_skills' or 'secondary_skills') are missing in the trainer data.")
+        st.stop()
+
     primary_col = 'primary_skills'
     secondary_col = 'secondary_skills'
 
@@ -119,6 +123,7 @@ def main():
         }
         column_mapping = validate_and_map_columns(trainers_df, required_columns)
         trainers_df = trainers_df.rename(columns=column_mapping)
+        st.write("Mapped Columns:", column_mapping)  # Debugging: Show mapped columns
         st.success("✅ Trainer data loaded and columns mapped successfully!")
     except Exception as e:
         st.error(f"Error loading trainer file: {e}")
@@ -136,6 +141,7 @@ def main():
             }
             column_mapping = validate_and_map_columns(managers_df, required_columns)
             managers_df = managers_df.rename(columns=column_mapping)
+            st.write("Mapped Columns (Managers):", column_mapping)  # Debugging: Show mapped columns
             st.success("✅ Managers file loaded and columns mapped successfully!")
         except Exception as e:
             st.error(f"Error processing managers file: {e}")
