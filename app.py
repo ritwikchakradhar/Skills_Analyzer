@@ -264,7 +264,7 @@ def main():
         # Configuration
         st.header("2. Configure Analysis")
         skills = list(st.session_state.skill_variations.keys())
-        selected_skills = st.multiselect("Select Skills", options=skills, default=['python', 'nodejs'])
+        selected_skills = st.multiselect("Select Skills", options=skills, default=['python', 'node.js'])
         user_skill = st.text_input("Enter a custom skill name for analysis (e.g., 'Go' for Golang):")
         min_score = st.slider("Minimum Skill Score (%)", 0, 100, 70, step=5)
 
