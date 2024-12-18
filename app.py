@@ -3,6 +3,7 @@ import pandas as pd
 import re
 from datetime import datetime
 import base64
+from fuzzywuzzy import process  # For fuzzy matching
 from typing import Dict, List, Optional
 
 # Page config
@@ -72,7 +73,12 @@ def extract_skill_score(skills_str: str, variations: List[str]) -> Optional[floa
                 max_score = score
     return max_score
 
-def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
+def fuzzy_match_skills(user_skill: str, all_skills: List[str], threshold: int = 80) -> List[str]:
+    """Fuzzy match the user skill to available skills."""
+    matches = process.extract(user_skill, all_skills, limit=10)  # Get the top 10 matches
+    return [match for match, score in matches if score >= threshold]
+
+def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score):
     """Analyze trainers against skills and scores."""
     trainers_df = clean_column_names(trainers_df)
     skill_columns = {
@@ -96,9 +102,16 @@ def analyze_skills(trainers_df, managers_df, selected_skills, min_score):
     trainers_df[primary_col] = trainers_df[primary_col].fillna('')
     trainers_df[secondary_col] = trainers_df[secondary_col].fillna('')
 
+    # Include fuzzy matches for the user-provided skill
+    all_skill_variations = [
+        variation for variations in st.session_state.skill_variations.values() for variation in variations
+    ]
+    matched_skills = fuzzy_match_skills(user_skill, all_skill_variations) if user_skill else []
+    st.write(f"Fuzzy matches for '{user_skill}': {matched_skills}")
+
     skill_scores = {}
     qualified_mask = pd.Series(True, index=trainers_df.index)
-    for skill in selected_skills:
+    for skill in selected_skills + matched_skills:
         variations = st.session_state.skill_variations.get(skill, [skill])
         primary_scores = trainers_df[primary_col].apply(lambda x: extract_skill_score(x, variations))
         secondary_scores = trainers_df[secondary_col].apply(lambda x: extract_skill_score(x, variations))
@@ -145,12 +158,13 @@ def main():
         st.header("2. Configure Analysis")
         skills = list(st.session_state.skill_variations.keys())
         selected_skills = st.multiselect("Select Skills", options=skills, default=['python', 'nodejs'])
+        user_skill = st.text_input("Enter a custom skill name for analysis (natural text):")
         min_score = st.slider("Minimum Skill Score (%)", 0, 100, 70, step=5)
 
         # Run Analysis
         if st.button("🔍 Analyze Skills"):
             with st.spinner("Analyzing data..."):
-                results = analyze_skills(trainers_df, managers_df, selected_skills, min_score)
+                results = analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score)
 
             # Display Results
             st.header("3. Results")
