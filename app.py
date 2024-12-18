@@ -31,14 +31,15 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
         .str.replace(r'"$', '', regex=True)  # Remove trailing "
         .str.strip()
         .str.lower()
-        .str.replace(' ', '')
-        .str.replace('_', '')
+        .str.replace(' ', '')  # Remove spaces
+        .str.replace('_', '')  # Remove underscores
     )
     return df
 
 def validate_and_map_columns(df: pd.DataFrame, required_columns: Dict[str, List[str]]) -> Dict[str, str]:
     """Validate and map required columns dynamically."""
     cleaned_columns = clean_column_names(df).columns
+    st.write("Cleaned Columns:", cleaned_columns.tolist())  # Debugging: Show cleaned columns
     column_mapping = {}
 
     for standard_name, variations in required_columns.items():
