@@ -43,6 +43,14 @@ def log_to_sheets(log_data: dict):
         client = get_google_sheets_client()
         if not client:
             return False
+
+        if st.button("Test Google Sheets"):
+            client = get_google_sheets_client()
+            if client:
+                st.success("Google Sheets connection successful!")
+            else:
+                st.error("Google Sheets connection failed.")
+
             
         # Open the spreadsheet (use your spreadsheet ID)
         sheet = client.open_by_key(st.secrets["sheets"]["spreadsheet_id"]).worksheet("Logs")
