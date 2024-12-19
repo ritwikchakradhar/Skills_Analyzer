@@ -1,4 +1,61 @@
 import streamlit as st
+from google.oauth2 import service_account
+import gspread
+import pandas as pd
+
+# Create a Google Sheets connection
+@st.cache_resource
+def get_google_sheets_client():
+    """Get Google Sheets client using service account credentials"""
+    try:
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ],
+        )
+        client = gspread.authorize(credentials)
+        return client
+    except Exception as e:
+        st.error(f"Failed to connect to Google Sheets: {str(e)}")
+        return None
+
+def log_to_sheets(log_data: dict):
+    """Log download data to Google Sheets"""
+    try:
+        # Get Google Sheets client
+        client = get_google_sheets_client()
+        if not client:
+            return False
+            
+        # Open the spreadsheet (use your spreadsheet ID)
+        sheet = client.open_by_key(st.secrets["spreadsheet_id"]).worksheet("Logs")
+        
+        # If sheet is empty, add headers
+        if sheet.row_count == 0:
+            headers = ["timestamp", "email", "project", "client", "opportunity", 
+                      "rows_found", "filename", "skills", "min_score"]
+            sheet.append_row(headers)
+        
+        # Add new row
+        row_data = [
+            log_data["timestamp"],
+            log_data["email"],
+            log_data["project"],
+            log_data["client"],
+            log_data["opportunity"],
+            log_data["rows_found"],
+            log_data["filename"],
+            log_data["skills"],
+            log_data["min_score"]
+        ]
+        sheet.append_row(row_data)
+        return True
+        
+    except Exception as e:
+        st.error(f"Failed to log to Google Sheets: {str(e)}")
+        return Falseimport streamlit as st
 import pandas as pd
 import re
 from datetime import datetime
@@ -17,22 +74,22 @@ st.set_page_config(
 )
 
 # Cache the CSV conversion
+# Initialize session state for logs
+if 'download_logs' not in st.session_state:
+    st.session_state.download_logs = []
+
 @st.cache_data
 def convert_df_to_csv(df):
     """Convert dataframe to CSV string with caching"""
     return df.to_csv(index=False).encode('utf-8')
 
-def save_log_to_csv(log_data: dict):
-    """Save the log data to the logs CSV file"""
-    log_df = pd.DataFrame([log_data])
-    try:
-        # Try to read existing logs
-        existing_logs = pd.read_csv('data/logs.csv')
-        updated_logs = pd.concat([existing_logs, log_df], ignore_index=True)
-    except FileNotFoundError:
-        updated_logs = log_df
-    # Save updated logs
-    updated_logs.to_csv('data/logs.csv', index=False)
+def append_to_logs(log_data: dict):
+    """Append to session state logs"""
+    st.session_state.download_logs.append(log_data)
+    
+    # You can view logs in the Streamlit app
+    if st.sidebar.checkbox("Show Download Logs"):
+        st.sidebar.dataframe(pd.DataFrame(st.session_state.download_logs))
 
 # Load Skills State
 def load_skill_variations() -> Dict[str, List[str]]:
