@@ -29,6 +29,7 @@ def load_skill_variations() -> Dict[str, List[str]]:
 if "skill_variations" not in st.session_state:
     st.session_state.skill_variations = load_skill_variations()
 
+
 # Helper Functions
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Clean column names by removing special characters, spaces, and formatting."""
