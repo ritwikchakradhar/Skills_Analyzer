@@ -173,15 +173,11 @@ def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_sc
 def save_log_to_csv(log_data, filename="trainer_data_logs.csv"):
     """Save the log data to a CSV file."""
     file_exists = os.path.exists(filename)
-
-    # Ensure the file has headers only if it doesn't exist
     with open(filename, mode='a', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=log_data.keys())
-
         if not file_exists:
-            writer.writeheader()  # Write headers if file doesn't exist
-
-        writer.writerow(log_data)  # Append the new log entry
+            writer.writeheader()
+        writer.writerow(log_data)
 
 def get_download_link(df: pd.DataFrame, filename: str) -> str:
     """Create a download link for DataFrame."""
@@ -244,69 +240,76 @@ def main():
                 if rows_found > 0:
                     filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                     
-                    # Initialize session state for tracking download button click
-                    if 'download_clicked' not in st.session_state:
-                        st.session_state.download_clicked = False
-                        
-                    # Download button
-                    if st.button("📥 Download Trainer Data", key="download_button"):
-                        st.session_state.download_clicked = True
-                    
-                    # Show form if download was clicked
-                    if st.session_state.download_clicked:
+                    # Initialize session state for tracking form visibility
+                    if 'show_form' not in st.session_state:
+                        st.session_state.show_form = False
+
+                    def toggle_form():
+                        st.session_state.show_form = not st.session_state.show_form
+
+                    # Download button with toggle
+                    st.button("📥 Download Trainer Data", 
+                             on_click=toggle_form,
+                             key="download_btn")
+
+                    # Show form when download is clicked
+                    if st.session_state.show_form:
                         st.subheader("📝 Download Information")
                         
                         # Create columns for a more compact form layout
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            turing_email = st.text_input("Turing Email ID", key="email_input")
-                            project_name = st.text_input("Project Name", key="project_input")
+                            turing_email = st.text_input("Turing Email ID", key="email")
+                            project_name = st.text_input("Project Name", key="project")
                             
                         with col2:
-                            client_name = st.text_input("Client Name", key="client_input")
+                            client_name = st.text_input("Client Name", key="client")
                             opportunity_type = st.selectbox(
                                 "Opportunity Type",
                                 ["Fulltime", "Part Time"],
-                                key="opportunity_input"
+                                key="opportunity"
                             )
                         
-                        # Submit button outside columns
-                        if st.button("Submit and Download", key="submit_button", type="primary"):
-                            if not all([turing_email, project_name, client_name]):
-                                st.error("⚠️ Please fill in all required fields")
-                            else:
-                                try:
-                                    # Save results to CSV
-                                    results.to_csv(filename, index=False)
-                                    
-                                    # Log the download
-                                    log_data = {
-                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                        "email": turing_email,
-                                        "project": project_name,
-                                        "client": client_name,
-                                        "opportunity": opportunity_type,
-                                        "rows_found": rows_found,
-                                        "file_path": filename
-                                    }
-                                    save_log_to_csv(log_data)
-                                    
-                                    # Success message and download link
-                                    st.success("✅ Details saved successfully!")
-                                    st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
-                                    
-                                    # Reset the download clicked state
-                                    st.session_state.download_clicked = False
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Error saving data: {str(e)}")
+                        # Submit and Cancel buttons
+                        col1, col2 = st.columns([1, 4])  # Adjust ratio for button layout
                         
-                        # Add a cancel button
-                        if st.button("Cancel", key="cancel_button"):
-                            st.session_state.download_clicked = False
-                            st.rerun()
-                                    
+                        with col1:
+                            if st.button("Submit", type="primary", key="submit"):
+                                if not all([turing_email, project_name, client_name]):
+                                    st.error("⚠️ Please fill in all required fields")
+                                else:
+                                    try:
+                                        # Save results to CSV
+                                        results.to_csv(filename, index=False)
+                                        
+                                        # Log the download
+                                        log_data = {
+                                            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                            "email": turing_email,
+                                            "project": project_name,
+                                            "client": client_name,
+                                            "opportunity": opportunity_type,
+                                            "rows_found": rows_found,
+                                            "file_path": filename
+                                        }
+                                        save_log_to_csv(log_data)
+                                        
+                                        # Success message and download link
+                                        st.success("✅ Details saved successfully!")
+                                        st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
+                                        
+                                        # Reset form visibility
+                                        st.session_state.show_form = False
+                                        
+                                    except Exception as e:
+                                        st.error(f"❌ Error saving data: {str(e)}")
+                        
+                        with col2:
+                            if st.button("Cancel", key="cancel"):
+                                st.session_state.show_form = False
+                                st.rerun()
+
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
             st.stop()
