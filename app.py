@@ -36,18 +36,6 @@ def get_google_sheets_client():
         st.error(f"Failed to connect to Google Sheets: {str(e)}")
         return None
 
-if st.button("Test Google Sheets Connection"):
-    try:
-        client = get_google_sheets_client()
-        if client:
-            st.success("Google Sheets connection successful!")
-            spreadsheet = client.open_by_key(st.secrets["sheets"]["spreadsheet_id"])
-            sheet = spreadsheet.worksheet("Logs")
-            st.success("Logs worksheet connected successfully!")
-        else:
-            st.error("Google Sheets client not initialized.")
-    except Exception as e:
-        st.error(f"Error testing Google Sheets connection: {str(e)}")
 
 
 def log_to_sheets(log_data: dict):
