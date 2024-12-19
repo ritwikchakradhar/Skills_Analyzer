@@ -199,7 +199,7 @@ def main():
                 results.to_csv(filename, index=False)
 
                 if st.button("📥 Download Trainer Data"):
-                    with st.form("log_details_form"):
+                    with st.form("log_details_form", clear_on_submit=True):
                         turing_email = st.text_input("Enter your Turing email ID")
                         project_name = st.text_input("Enter the Project Name")
                         client_name = st.text_input("Enter the Client Name")
