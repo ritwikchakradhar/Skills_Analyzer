@@ -290,11 +290,18 @@ def main():
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
 
-                    # Initialize session state for download data
-                    if 'download_data' not in st.session_state:
-                        st.session_state.download_data = None
-                        
-                    # Using st.form to prevent rerun on every input change
+                # Download section
+                if rows_found > 0:
+                    st.markdown("---")
+                    st.subheader("📝 Download Information")
+                    st.write("Please fill in the following details to download the results:")
+
+                    # Initialize download state
+                    if 'csv_data' not in st.session_state:
+                        st.session_state.csv_data = None
+                        st.session_state.filename = None
+
+                    # Using st.form for the download information
                     with st.form(key="download_form"):
                         col1, col2 = st.columns(2)
                         
@@ -309,63 +316,60 @@ def main():
                                 ["Fulltime", "Part Time"]
                             )
                         
-                        # Form submit button
-                        submitted = st.form_submit_button("Submit Details", type="primary")
-                    
-                    # Handle form submission
-                    if submitted:
+                        submit_button = st.form_submit_button("Submit Details", type="primary")
+
+                    # Process form submission
+                    if submit_button:
                         if not all([turing_email, project_name, client_name]):
                             st.error("⚠️ Please fill in all required fields")
                         else:
+                            # Generate filename and convert data
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            filename = f"qualified_trainers_{timestamp}.csv"
+                            csv_data = convert_df_to_csv(results)
+                            
+                            # Store in session state
+                            st.session_state.csv_data = csv_data
+                            st.session_state.filename = filename
+
+                            # Create log entry
+                            log_data = {
+                                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                "email": turing_email,
+                                "project": project_name,
+                                "client": client_name,
+                                "opportunity": opportunity_type,
+                                "rows_found": rows_found,
+                                "filename": filename,
+                                "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
+                                "min_score": min_score
+                            }
+                            
                             try:
-                                # Generate filename
-                                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                filename = f"qualified_trainers_{timestamp}.csv"
-                                
-                                # Convert DataFrame to CSV and store in session state
-                                st.session_state.download_data = {
-                                    'csv_data': convert_df_to_csv(results),
-                                    'filename': filename
-                                }
-                                
-                                # Create log entry
-                                log_data = {
-                                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    "email": turing_email,
-                                    "project": project_name,
-                                    "client": client_name,
-                                    "opportunity": opportunity_type,
-                                    "rows_found": rows_found,
-                                    "filename": filename,
-                                    "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
-                                    "min_score": min_score
-                                }
-                                
                                 # Log to Google Sheets
                                 if log_to_sheets(log_data):
                                     st.success("✅ Details logged successfully!")
                                 else:
                                     st.warning("⚠️ Failed to log details, but you can still download the file.")
-                                
                             except Exception as e:
-                                st.error(f"❌ Error preparing download: {str(e)}")
-                                st.exception(e)
-                    
+                                st.error(f"❌ Error logging details: {str(e)}")
+                                st.warning("Proceeding with download without logging.")
+
                     # Show download button if data is available
-                    if st.session_state.download_data is not None:
+                    if hasattr(st.session_state, 'csv_data') and st.session_state.csv_data is not None:
                         st.markdown("### Download Your Results")
                         st.write("Click below to download your CSV file:")
                         st.download_button(
                             label="📥 Download CSV File",
-                            data=st.session_state.download_data['csv_data'],
-                            file_name=st.session_state.download_data['filename'],
+                            data=st.session_state.csv_data,
+                            file_name=st.session_state.filename,
                             mime="text/csv",
                             key='download-csv'
                         )
                                     
-                        except Exception as e:
-                            st.error(f"❌ Error preparing download: {str(e)}")
-                            st.exception(e)  # This will show the full error trace
+                                except Exception as e:
+                                    st.error(f"❌ Error preparing download: {str(e)}")
+                                    st.exception(e)  # This will show the full error trace
                         
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
