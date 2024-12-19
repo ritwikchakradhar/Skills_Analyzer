@@ -290,6 +290,10 @@ def main():
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
 
+                    # Initialize session state for download data
+                    if 'download_data' not in st.session_state:
+                        st.session_state.download_data = None
+                        
                     # Using st.form to prevent rerun on every input change
                     with st.form(key="download_form"):
                         col1, col2 = st.columns(2)
@@ -308,7 +312,7 @@ def main():
                         # Form submit button
                         submitted = st.form_submit_button("Submit Details", type="primary")
                     
-                    # Handle form submission and show download button outside the form
+                    # Handle form submission
                     if submitted:
                         if not all([turing_email, project_name, client_name]):
                             st.error("⚠️ Please fill in all required fields")
@@ -318,8 +322,11 @@ def main():
                                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                                 filename = f"qualified_trainers_{timestamp}.csv"
                                 
-                                # Convert DataFrame to CSV
-                                csv_data = convert_df_to_csv(results)
+                                # Convert DataFrame to CSV and store in session state
+                                st.session_state.download_data = {
+                                    'csv_data': convert_df_to_csv(results),
+                                    'filename': filename
+                                }
                                 
                                 # Create log entry
                                 log_data = {
@@ -340,19 +347,25 @@ def main():
                                 else:
                                     st.warning("⚠️ Failed to log details, but you can still download the file.")
                                 
-                                # Show download button separately after form submission
-                                st.markdown("### Download Your Results")
-                                st.write("Click below to download your CSV file:")
-                                st.download_button(
-                                    label="📥 Download CSV File",
-                                    data=csv_data,
-                                    file_name=filename,
-                                    mime="text/csv",
-                                    key='download-csv'
-                                )
                             except Exception as e:
                                 st.error(f"❌ Error preparing download: {str(e)}")
-                                st.exception(e)  # This will show the full error trace
+                                st.exception(e)
+                    
+                    # Show download button if data is available
+                    if st.session_state.download_data is not None:
+                        st.markdown("### Download Your Results")
+                        st.write("Click below to download your CSV file:")
+                        st.download_button(
+                            label="📥 Download CSV File",
+                            data=st.session_state.download_data['csv_data'],
+                            file_name=st.session_state.download_data['filename'],
+                            mime="text/csv",
+                            key='download-csv'
+                        )
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error preparing download: {str(e)}")
+                                    st.exception(e)  # This will show the full error trace
                         
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
