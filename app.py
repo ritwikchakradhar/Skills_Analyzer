@@ -231,6 +231,25 @@ def main():
                 with st.spinner("Analyzing data..."):
                     results = analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score)
 
+@st.cache_data
+def convert_df_to_csv(df):
+    """Convert dataframe to CSV string with caching"""
+    return df.to_csv(index=False).encode('utf-8')
+
+def save_log_to_csv(log_data: dict):
+    """Save the log data to the logs CSV file"""
+    log_df = pd.DataFrame([log_data])
+    
+    try:
+        # Try to read existing logs
+        existing_logs = pd.read_csv('data/logs.csv')
+        updated_logs = pd.concat([existing_logs, log_df], ignore_index=True)
+    except FileNotFoundError:
+        updated_logs = log_df
+        
+    # Save updated logs
+    updated_logs.to_csv('data/logs.csv', index=False)
+
                 # Display Results Summary
                 st.header("3. Results Summary")
                 rows_found = results.shape[0]
@@ -270,17 +289,38 @@ def main():
                                 st.error("⚠️ Please fill in all required fields")
                             else:
                                 try:
-                                    # Convert DataFrame to CSV
-                                    csv = results.to_csv(index=False)
+                                    # Generate filename
+                                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                    filename = f"qualified_trainers_{timestamp}.csv"
                                     
-                                    # Create the download link
+                                    # Convert DataFrame to CSV
+                                    csv_data = convert_df_to_csv(results)
+                                    
+                                    # Log the download
+                                    log_data = {
+                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        "email": turing_email,
+                                        "project": project_name,
+                                        "client": client_name,
+                                        "opportunity": opportunity_type,
+                                        "rows_found": rows_found,
+                                        "filename": filename
+                                    }
+                                    save_log_to_csv(log_data)
+                                    
+                                    # Create download button
                                     st.success("✅ Details saved successfully! Click below to download.")
                                     st.download_button(
                                         label="📥 Download CSV File",
-                                        data=csv,
-                                        file_name=f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                        mime="text/csv"
+                                        data=csv_data,
+                                        file_name=filename,
+                                        mime="text/csv",
+                                        key='download-csv'
                                     )
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error preparing download: {str(e)}")
+                                    st.exception(e)  # This will show the full error trace
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error preparing download: {str(e)}")
