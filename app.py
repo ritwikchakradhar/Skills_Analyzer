@@ -16,6 +16,24 @@ st.set_page_config(
     layout="wide"
 )
 
+# Cache the CSV conversion
+@st.cache_data
+def convert_df_to_csv(df):
+    """Convert dataframe to CSV string with caching"""
+    return df.to_csv(index=False).encode('utf-8')
+
+def save_log_to_csv(log_data: dict):
+    """Save the log data to the logs CSV file"""
+    log_df = pd.DataFrame([log_data])
+    try:
+        # Try to read existing logs
+        existing_logs = pd.read_csv('data/logs.csv')
+        updated_logs = pd.concat([existing_logs, log_df], ignore_index=True)
+    except FileNotFoundError:
+        updated_logs = log_df
+    # Save updated logs
+    updated_logs.to_csv('data/logs.csv', index=False)
+
 # Load Skills State
 def load_skill_variations() -> Dict[str, List[str]]:
     """Load skill variations from the skills_state.txt file."""
@@ -170,21 +188,6 @@ def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_sc
 
     return qualified_trainers
 
-def save_log_to_csv(log_data, filename="trainer_data_logs.csv"):
-    """Save the log data to a CSV file."""
-    file_exists = os.path.exists(filename)
-    with open(filename, mode='a', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=log_data.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(log_data)
-
-def get_download_link(df: pd.DataFrame, filename: str) -> str:
-    """Create a download link for DataFrame."""
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    return f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download Results</a>'
-
 def main():
     st.title("🎯 Skills Analyzer")
 
@@ -215,10 +218,6 @@ def main():
             managers_df = validate_managers_df(managers_df)
             st.success("✅ Managers data validated and processed successfully!")
             
-            # Show preview of processed data
-            st.write("### Preview of Processed Managers Data")
-            st.dataframe(managers_df.head())
-
             # Configuration
             st.header("2. Configure Analysis")
             skills = list(st.session_state.skill_variations.keys())
@@ -230,25 +229,6 @@ def main():
             if st.button("🔍 Analyze Skills"):
                 with st.spinner("Analyzing data..."):
                     results = analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score)
-
-@st.cache_data
-def convert_df_to_csv(df):
-    """Convert dataframe to CSV string with caching"""
-    return df.to_csv(index=False).encode('utf-8')
-
-def save_log_to_csv(log_data: dict):
-    """Save the log data to the logs CSV file"""
-    log_df = pd.DataFrame([log_data])
-    
-    try:
-        # Try to read existing logs
-        existing_logs = pd.read_csv('data/logs.csv')
-        updated_logs = pd.concat([existing_logs, log_df], ignore_index=True)
-    except FileNotFoundError:
-        updated_logs = log_df
-        
-    # Save updated logs
-    updated_logs.to_csv('data/logs.csv', index=False)
 
                 # Display Results Summary
                 st.header("3. Results Summary")
@@ -296,18 +276,6 @@ def save_log_to_csv(log_data: dict):
                                     # Convert DataFrame to CSV
                                     csv_data = convert_df_to_csv(results)
                                     
-                                    # Log the download
-                                    log_data = {
-                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                        "email": turing_email,
-                                        "project": project_name,
-                                        "client": client_name,
-                                        "opportunity": opportunity_type,
-                                        "rows_found": rows_found,
-                                        "filename": filename
-                                    }
-                                    save_log_to_csv(log_data)
-                                    
                                     # Create download button
                                     st.success("✅ Details saved successfully! Click below to download.")
                                     st.download_button(
@@ -321,61 +289,7 @@ def save_log_to_csv(log_data: dict):
                                 except Exception as e:
                                     st.error(f"❌ Error preparing download: {str(e)}")
                                     st.exception(e)  # This will show the full error trace
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Error preparing download: {str(e)}")
-
-                    
-                    st.subheader("📝 Download Information")
-                    st.write("Please fill in the following details to download the results:")
-
-                    # Using st.form to prevent rerun on every input change
-                    with st.form(key="download_form"):
-                        # Create columns for a more compact form layout
-                        col1, col2 = st.columns(2)
                         
-                        with col1:
-                            turing_email = st.text_input("Turing Email ID")
-                            project_name = st.text_input("Project Name")
-                            
-                        with col2:
-                            client_name = st.text_input("Client Name")
-                            opportunity_type = st.selectbox(
-                                "Opportunity Type",
-                                ["Fulltime", "Part Time"]
-                            )
-                        
-                        # Submit button inside form
-                        submit_button = st.form_submit_button("📥 Download Results", type="primary")
-                        
-                        if submit_button:
-                            if not all([turing_email, project_name, client_name]):
-                                st.error("⚠️ Please fill in all required fields")
-                            else:
-                                try:
-                                    # Save results to CSV
-                                    results.to_csv(filename, index=False)
-                                    
-                                    # Log the download
-                                    log_data = {
-                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                        "email": turing_email,
-                                        "project": project_name,
-                                        "client": client_name,
-                                        "opportunity": opportunity_type,
-                                        "rows_found": rows_found,
-                                        "file_path": filename
-                                    }
-                                    save_log_to_csv(log_data)
-                                    
-                                    # Success message and download link
-                                    st.success("✅ Details saved successfully!")
-                                    st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Error saving data: {str(e)}")
-
-
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
             st.stop()
