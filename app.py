@@ -244,31 +244,39 @@ def main():
                 if rows_found > 0:
                     filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                     
-                    # Initialize session state for form visibility
-                    if 'show_form' not in st.session_state:
-                        st.session_state.show_form = False
+                    # Initialize session state for tracking download button click
+                    if 'download_clicked' not in st.session_state:
+                        st.session_state.download_clicked = False
+                        
+                    # Download button
+                    if st.button("📥 Download Trainer Data", key="download_button"):
+                        st.session_state.download_clicked = True
                     
-                    # Download button to trigger form
-                    if st.button("📥 Download Trainer Data"):
-                        st.session_state.show_form = True
-                    
-                    # Show form when button is clicked
-                    if st.session_state.show_form:
-                        with st.form(key="download_form"):
-                            st.subheader("Please provide additional information")
-                            turing_email = st.text_input("Enter your Turing email ID")
-                            project_name = st.text_input("Enter the Project Name")
-                            client_name = st.text_input("Enter the Client Name")
-                            opportunity_type = st.selectbox(
-                                "Select Opportunity Type", 
-                                ["Fulltime", "Part Time"]
-                            )
-                            submit_button = st.form_submit_button("Submit and Download")
+                    # Show form if download was clicked
+                    if st.session_state.download_clicked:
+                        st.subheader("📝 Download Information")
+                        
+                        # Create columns for a more compact form layout
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            turing_email = st.text_input("Turing Email ID", key="email_input")
+                            project_name = st.text_input("Project Name", key="project_input")
                             
-                            if submit_button:
-                                if not all([turing_email, project_name, client_name]):
-                                    st.error("Please fill in all fields")
-                                else:
+                        with col2:
+                            client_name = st.text_input("Client Name", key="client_input")
+                            opportunity_type = st.selectbox(
+                                "Opportunity Type",
+                                ["Fulltime", "Part Time"],
+                                key="opportunity_input"
+                            )
+                        
+                        # Submit button outside columns
+                        if st.button("Submit and Download", key="submit_button", type="primary"):
+                            if not all([turing_email, project_name, client_name]):
+                                st.error("⚠️ Please fill in all required fields")
+                            else:
+                                try:
                                     # Save results to CSV
                                     results.to_csv(filename, index=False)
                                     
@@ -284,12 +292,20 @@ def main():
                                     }
                                     save_log_to_csv(log_data)
                                     
-                                    # Create download link
-                                    st.success("Details saved successfully!")
+                                    # Success message and download link
+                                    st.success("✅ Details saved successfully!")
                                     st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
                                     
-                                    # Reset form visibility
-                                    st.session_state.show_form = False
+                                    # Reset the download clicked state
+                                    st.session_state.download_clicked = False
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error saving data: {str(e)}")
+                        
+                        # Add a cancel button
+                        if st.button("Cancel", key="cancel_button"):
+                            st.session_state.download_clicked = False
+                            st.rerun()
                                     
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
