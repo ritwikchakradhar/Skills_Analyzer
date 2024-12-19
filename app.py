@@ -3,19 +3,27 @@ import json
 import os
 
 # File path for the skills state
-SKILLS_STATE_FILE = "skills_states.txt"
+SKILLS_STATE_FILE = "skills_state.txt"
 
 def load_skills():
     """Load skills from the skills_state.txt file."""
     if os.path.exists(SKILLS_STATE_FILE):
         with open(SKILLS_STATE_FILE, "r") as file:
-            skills_content = file.read()
-            skills_content = skills_content.replace("st.session_state.skill_variations = ", "")
-            skills_variations = json.loads(skills_content)
-        return skills_variations
+            skills_content = file.read().strip()
+            # Remove the prefix `st.session_state.skill_variations =`
+            if skills_content.startswith("st.session_state.skill_variations ="):
+                skills_content = skills_content.replace("st.session_state.skill_variations =", "").strip()
+            try:
+                # Parse the cleaned JSON content
+                skills_variations = json.loads(skills_content)
+                return skills_variations
+            except json.JSONDecodeError as e:
+                st.error(f"Error parsing JSON from skills file: {e}")
+                return {}
     else:
-        st.error("Skills file not found. Please ensure skills_states.txt is available.")
+        st.error("Skills file not found. Please ensure skills_state.txt is available.")
         return {}
+
 
 def get_primary_secondary_matches(skills_variations, trainer_data, selected_skills):
     """Fetch matches for selected skills from primary and secondary skills columns."""
