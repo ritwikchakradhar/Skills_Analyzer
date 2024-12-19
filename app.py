@@ -234,11 +234,61 @@ def main():
                 # Display Results Summary
                 st.header("3. Results Summary")
                 rows_found = results.shape[0]
-                st.success(f"Total trainers found meeting criteria: {rows_found}")
-
-                # Download Section
+                
+                # Clear summary with detailed information
+                st.info(f"""
+                📊 Analysis Results:
+                - Total trainers found: {rows_found}
+                - Skills analyzed: {', '.join(selected_skills + ([user_skill] if user_skill else []))}
+                - Minimum score requirement: {min_score}%
+                """)
+                
+                # Show preview of results
                 if rows_found > 0:
-                    filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                    st.write("### Preview of Matched Trainers")
+                    st.dataframe(results.head())
+                    
+                    st.markdown("---")
+                    st.subheader("📝 Download Information")
+                    st.write("Please fill in the following details to download the results:")
+
+                    # Using st.form to prevent rerun on every input change
+                    with st.form(key="download_form"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            turing_email = st.text_input("Turing Email ID")
+                            project_name = st.text_input("Project Name")
+                            
+                        with col2:
+                            client_name = st.text_input("Client Name")
+                            opportunity_type = st.selectbox(
+                                "Opportunity Type",
+                                ["Fulltime", "Part Time"]
+                            )
+                        
+                        submitted = st.form_submit_button("📥 Download Results", type="primary")
+                        
+                        if submitted:
+                            if not all([turing_email, project_name, client_name]):
+                                st.error("⚠️ Please fill in all required fields")
+                            else:
+                                try:
+                                    # Convert DataFrame to CSV
+                                    csv = results.to_csv(index=False)
+                                    
+                                    # Create the download link
+                                    st.success("✅ Details saved successfully! Click below to download.")
+                                    st.download_button(
+                                        label="📥 Download CSV File",
+                                        data=csv,
+                                        file_name=f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                        mime="text/csv"
+                                    )
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error preparing download: {str(e)}")
+
                     
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
