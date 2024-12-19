@@ -1,79 +1,75 @@
 import streamlit as st
 import json
-import os
 
-# File path for the skills state
-SKILLS_STATE_FILE = "skills_state.txt"
-
+# Function to load skills from the file
 def load_skills():
-    """Load skills from the skills_state.txt file."""
-    if os.path.exists(SKILLS_STATE_FILE):
-        with open(SKILLS_STATE_FILE, "r") as file:
-            skills_content = file.read().strip()
-            # Remove the prefix `st.session_state.skill_variations =`
-            if skills_content.startswith("st.session_state.skill_variations ="):
-                skills_content = skills_content.replace("st.session_state.skill_variations =", "").strip()
-            try:
-                # Parse the cleaned JSON content
-                skills_variations = json.loads(skills_content)
-                return skills_variations
-            except json.JSONDecodeError as e:
-                st.error(f"Error parsing JSON from skills file: {e}")
-                return {}
-    else:
-        st.error("Skills file not found. Please ensure skills_state.txt is available.")
+    try:
+        with open("skills_state.txt", "r") as file:
+            skills_content = file.read()
+            # Extract the dictionary from the file
+            skills_variations = json.loads(skills_content)
+        return skills_variations
+    except Exception as e:
+        st.error(f"Error loading skills: {e}")
         return {}
 
-
-def get_primary_secondary_matches(skills_variations, trainer_data, selected_skills):
-    """Fetch matches for selected skills from primary and secondary skills columns."""
-    matches = []
-    for skill in selected_skills:
-        variations = skills_variations.get(skill, [skill])
-        for index, row in trainer_data.iterrows():
-            if any(variation in row['Primary Skills'] or variation in row['Secondary Skills'] for variation in variations):
-                matches.append(row.to_dict())
-    return matches
-
-def get_custom_skill_matches(custom_skill, trainer_data):
-    """Match an exact custom skill in the trainer data."""
-    matches = []
-    for index, row in trainer_data.iterrows():
-        if custom_skill in row['Primary Skills'] or custom_skill in row['Secondary Skills']:
-            matches.append(row.to_dict())
-    return matches
+# Function to handle exact matching for custom skills
+def match_custom_skill(custom_skill, skills_variations, trainer_data):
+    for trainer in trainer_data:
+        primary_skills = trainer.get("Primary Skills", [])
+        secondary_skills = trainer.get("Secondary Skills", [])
+        if custom_skill in primary_skills or custom_skill in secondary_skills:
+            return trainer
+    return None
 
 def main():
-    # Load skills into session state
+    st.title("Skills Analyzer")
+
+    # Load skills from the file
     skills_variations = load_skills()
-    st.session_state.skill_variations = skills_variations
 
-    st.title("Skill Variations App")
+    # Mock trainer data for demonstration
+    trainer_data = [
+        {
+            "Name": "Trainer A",
+            "Primary Skills": ["python", "javascript", "aws"],
+            "Secondary Skills": ["docker", "kubernetes"]
+        },
+        {
+            "Name": "Trainer B",
+            "Primary Skills": ["java", "angular"],
+            "Secondary Skills": ["spring", "react"]
+        }
+    ]
 
-    # Simulated trainer data
-    trainer_data = st.session_state.get("trainer_data", None)
-    if trainer_data is None:
-        st.session_state.trainer_data = [
-            {"Trainer": "Trainer A", "Primary Skills": "python, flask", "Secondary Skills": "django, sql"},
-            {"Trainer": "Trainer B", "Primary Skills": "javascript, react", "Secondary Skills": "node.js, vue.js"},
-            # Add more mock trainer rows as needed
-        ]
+    # Skill selection dropdown
+    skill_options = list(skills_variations.keys())
+    selected_skills = st.multiselect("Select Skills", options=skill_options, default=[])
 
-    # Display available skills for selection
-    skills = list(st.session_state.skill_variations.keys())
-    selected_skills = st.multiselect("Select Skills", options=skills)
-
-    if selected_skills:
-        matches = get_primary_secondary_matches(st.session_state.skill_variations, st.session_state.trainer_data, selected_skills)
-        st.write("Matching Trainers for Selected Skills:")
-        st.write(matches)
-
-    # Input for custom skill
+    # Custom skill input
     custom_skill = st.text_input("Enter a Custom Skill")
+
+    # Match custom skill
     if custom_skill:
-        matches = get_custom_skill_matches(custom_skill, st.session_state.trainer_data)
-        st.write(f"Matching Trainers for Custom Skill '{custom_skill}':")
-        st.write(matches)
+        matched_trainer = match_custom_skill(custom_skill, skills_variations, trainer_data)
+        if matched_trainer:
+            st.success(f"Matched Trainer: {matched_trainer['Name']}")
+        else:
+            st.warning("No trainer found with the custom skill.")
+
+    # Display trainers with selected skills
+    if selected_skills:
+        st.write("Trainers with selected skills:")
+        for trainer in trainer_data:
+            primary_skills = trainer.get("Primary Skills", [])
+            secondary_skills = trainer.get("Secondary Skills", [])
+            combined_skills = primary_skills + secondary_skills
+
+            # Match any variation of the selected skills
+            for skill in selected_skills:
+                if any(var in combined_skills for var in skills_variations.get(skill, [])):
+                    st.write(f"- {trainer['Name']} (Primary: {primary_skills}, Secondary: {secondary_skills})")
+                    break
 
 if __name__ == "__main__":
     main()
