@@ -34,8 +34,8 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Clean column names by removing special characters, spaces, and formatting."""
     df.columns = (
         df.columns
-        .str.replace(r'^="', '', regex=True)  # Remove leading ="
-        .str.replace(r'"$', '', regex=True)  # Remove trailing "
+        .str.replace(r'^="', '', regex=True)
+        .str.replace(r'"$', '', regex=True)
         .str.strip()
         .str.lower()
         .str.replace(' ', '')
@@ -137,6 +137,19 @@ def analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_sc
 
     return qualified_trainers
 
+def save_log_to_csv(log_data, filename="trainer_data_logs.csv"):
+    """Save the log data to a CSV file."""
+    file_exists = os.path.exists(filename)
+
+    # Ensure the file has headers only if it doesn't exist
+    with open(filename, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=log_data.keys())
+
+        if not file_exists:
+            writer.writeheader()  # Write headers if file doesn't exist
+
+        writer.writerow(log_data)  # Append the new log entry
+
 def get_download_link(df: pd.DataFrame, filename: str) -> str:
     """Create a download link for DataFrame."""
     csv = df.to_csv(index=False)
@@ -174,14 +187,37 @@ def main():
             with st.spinner("Analyzing data..."):
                 results = analyze_skills(trainers_df, managers_df, selected_skills, user_skill, min_score)
 
-            # Display Results
-            st.header("3. Results")
-            if not results.empty:
-                st.dataframe(results)
+            # Display Results Summary
+            st.header("3. Results Summary")
+            rows_found = results.shape[0]
+            st.success(f"Total trainers found meeting criteria: {rows_found}")
+
+            # Download Button
+            if rows_found > 0:
                 filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
-            else:
-                st.warning("No trainers matched the criteria.")
+                results.to_csv(filename, index=False)
+
+                if st.button("📥 Download Trainer Data"):
+                    with st.form("log_details_form"):
+                        turing_email = st.text_input("Enter your Turing email ID")
+                        project_name = st.text_input("Enter the Project Name")
+                        client_name = st.text_input("Enter the Client Name")
+                        opportunity_type = st.selectbox("Select Opportunity Type", ["Fulltime", "Part Time"])
+                        submitted = st.form_submit_button("Submit")
+
+                    if submitted:
+                        log_data = {
+                            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            "email": turing_email,
+                            "project": project_name,
+                            "client": client_name,
+                            "opportunity": opportunity_type,
+                            "rows_found": rows_found,
+                            "file_path": filename
+                        }
+                        save_log_to_csv(log_data)
+                        st.success("Details saved and file ready for download.")
+                        st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
