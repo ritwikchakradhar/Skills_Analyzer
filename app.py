@@ -305,47 +305,51 @@ def main():
                                 ["Fulltime", "Part Time"]
                             )
                         
-                        submitted = st.form_submit_button("📥 Download Results", type="primary")
-                        
-                        if submitted:
-                            if not all([turing_email, project_name, client_name]):
-                                st.error("⚠️ Please fill in all required fields")
-                            else:
-                                try:
-                                    # Generate filename
-                                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                    filename = f"qualified_trainers_{timestamp}.csv"
-                                    
-                                    # Convert DataFrame to CSV
-                                    csv_data = convert_df_to_csv(results)
-                                    
-                                    # Create log entry
-                                    log_data = {
-                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                        "email": turing_email,
-                                        "project": project_name,
-                                        "client": client_name,
-                                        "opportunity": opportunity_type,
-                                        "rows_found": rows_found,
-                                        "filename": filename,
-                                        "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
-                                        "min_score": min_score
-                                    }
-                                    
-                                    # Log to Google Sheets
-                                    if log_to_sheets(log_data):
-                                        st.success("✅ Download details logged successfully!")
-                                    else:
-                                        st.warning("⚠️ Failed to log download details, but you can still download the file.")
-                                    
-                                    # Download button
-                                    st.download_button(
-                                        label="📥 Download Results CSV",
-                                        data=csv_data,
-                                        file_name=filename,
-                                        mime="text/csv",
-                                        key='download-csv'
-                                    )
+                        # Form submit button
+                        submitted = st.form_submit_button("Submit Details", type="primary")
+                    
+                    # Handle form submission and show download button outside the form
+                    if submitted:
+                        if not all([turing_email, project_name, client_name]):
+                            st.error("⚠️ Please fill in all required fields")
+                        else:
+                            try:
+                                # Generate filename
+                                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                filename = f"qualified_trainers_{timestamp}.csv"
+                                
+                                # Convert DataFrame to CSV
+                                csv_data = convert_df_to_csv(results)
+                                
+                                # Create log entry
+                                log_data = {
+                                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    "email": turing_email,
+                                    "project": project_name,
+                                    "client": client_name,
+                                    "opportunity": opportunity_type,
+                                    "rows_found": rows_found,
+                                    "filename": filename,
+                                    "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
+                                    "min_score": min_score
+                                }
+                                
+                                # Log to Google Sheets
+                                if log_to_sheets(log_data):
+                                    st.success("✅ Details logged successfully!")
+                                else:
+                                    st.warning("⚠️ Failed to log details, but you can still download the file.")
+                                
+                                # Show download button separately after form submission
+                                st.markdown("### Download Your Results")
+                                st.write("Click below to download your CSV file:")
+                                st.download_button(
+                                    label="📥 Download CSV File",
+                                    data=csv_data,
+                                    file_name=filename,
+                                    mime="text/csv",
+                                    key='download-csv'
+                                )
                                     
                                 except Exception as e:
                                     st.error(f"❌ Error preparing download: {str(e)}")
