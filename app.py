@@ -353,10 +353,6 @@ def main():
                             except Exception as e:
                                 st.error(f"❌ Error preparing download: {str(e)}")
                                 st.exception(e)  # This will show the full error trace
-                                    
-                                except Exception as e:
-                                    st.error(f"❌ Error preparing download: {str(e)}")
-                                    st.exception(e)  # This will show the full error trace
                         
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
