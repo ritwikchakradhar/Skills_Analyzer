@@ -240,75 +240,52 @@ def main():
                 if rows_found > 0:
                     filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                     
-                    # Initialize session state for tracking form visibility
-                    if 'show_form' not in st.session_state:
-                        st.session_state.show_form = False
+                    st.subheader("📝 Download Information")
+                    st.write("Please fill in the following details to download the results:")
+                        
+                    # Create columns for a more compact form layout
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        turing_email = st.text_input("Turing Email ID", key="email")
+                        project_name = st.text_input("Project Name", key="project")
+                        
+                    with col2:
+                        client_name = st.text_input("Client Name", key="client")
+                        opportunity_type = st.selectbox(
+                            "Opportunity Type",
+                            ["Fulltime", "Part Time"],
+                            key="opportunity"
+                        )
+                    
+                    # Download button
+                    if st.button("📥 Download Results", type="primary"):
+                        if not all([turing_email, project_name, client_name]):
+                            st.error("⚠️ Please fill in all required fields")
+                        else:
+                            try:
+                                # Save results to CSV
+                                results.to_csv(filename, index=False)
+                                
+                                # Log the download
+                                log_data = {
+                                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    "email": turing_email,
+                                    "project": project_name,
+                                    "client": client_name,
+                                    "opportunity": opportunity_type,
+                                    "rows_found": rows_found,
+                                    "file_path": filename
+                                }
+                                save_log_to_csv(log_data)
+                                
+                                # Success message and download link
+                                st.success("✅ Details saved successfully!")
+                                st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
+                                
+                            except Exception as e:
+                                st.error(f"❌ Error saving data: {str(e)}")
 
-                    def toggle_form():
-                        st.session_state.show_form = not st.session_state.show_form
-
-                    # Download button with toggle
-                    st.button("📥 Download Trainer Data", 
-                             on_click=toggle_form,
-                             key="download_btn")
-
-                    # Show form when download is clicked
-                    if st.session_state.show_form:
-                        st.subheader("📝 Download Information")
-                        
-                        # Create columns for a more compact form layout
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            turing_email = st.text_input("Turing Email ID", key="email")
-                            project_name = st.text_input("Project Name", key="project")
-                            
-                        with col2:
-                            client_name = st.text_input("Client Name", key="client")
-                            opportunity_type = st.selectbox(
-                                "Opportunity Type",
-                                ["Fulltime", "Part Time"],
-                                key="opportunity"
-                            )
-                        
-                        # Submit and Cancel buttons
-                        col1, col2 = st.columns([1, 4])  # Adjust ratio for button layout
-                        
-                        with col1:
-                            if st.button("Submit", type="primary", key="submit"):
-                                if not all([turing_email, project_name, client_name]):
-                                    st.error("⚠️ Please fill in all required fields")
-                                else:
-                                    try:
-                                        # Save results to CSV
-                                        results.to_csv(filename, index=False)
-                                        
-                                        # Log the download
-                                        log_data = {
-                                            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                            "email": turing_email,
-                                            "project": project_name,
-                                            "client": client_name,
-                                            "opportunity": opportunity_type,
-                                            "rows_found": rows_found,
-                                            "file_path": filename
-                                        }
-                                        save_log_to_csv(log_data)
-                                        
-                                        # Success message and download link
-                                        st.success("✅ Details saved successfully!")
-                                        st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
-                                        
-                                        # Reset form visibility
-                                        st.session_state.show_form = False
-                                        
-                                    except Exception as e:
-                                        st.error(f"❌ Error saving data: {str(e)}")
-                        
-                        with col2:
-                            if st.button("Cancel", key="cancel"):
-                                st.session_state.show_form = False
-                                st.rerun()
 
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
