@@ -242,49 +242,52 @@ def main():
                     
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
+
+                    # Using st.form to prevent rerun on every input change
+                    with st.form(key="download_form"):
+                        # Create columns for a more compact form layout
+                        col1, col2 = st.columns(2)
                         
-                    # Create columns for a more compact form layout
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        turing_email = st.text_input("Turing Email ID", key="email")
-                        project_name = st.text_input("Project Name", key="project")
+                        with col1:
+                            turing_email = st.text_input("Turing Email ID")
+                            project_name = st.text_input("Project Name")
+                            
+                        with col2:
+                            client_name = st.text_input("Client Name")
+                            opportunity_type = st.selectbox(
+                                "Opportunity Type",
+                                ["Fulltime", "Part Time"]
+                            )
                         
-                    with col2:
-                        client_name = st.text_input("Client Name", key="client")
-                        opportunity_type = st.selectbox(
-                            "Opportunity Type",
-                            ["Fulltime", "Part Time"],
-                            key="opportunity"
-                        )
-                    
-                    # Download button
-                    if st.button("📥 Download Results", type="primary"):
-                        if not all([turing_email, project_name, client_name]):
-                            st.error("⚠️ Please fill in all required fields")
-                        else:
-                            try:
-                                # Save results to CSV
-                                results.to_csv(filename, index=False)
-                                
-                                # Log the download
-                                log_data = {
-                                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    "email": turing_email,
-                                    "project": project_name,
-                                    "client": client_name,
-                                    "opportunity": opportunity_type,
-                                    "rows_found": rows_found,
-                                    "file_path": filename
-                                }
-                                save_log_to_csv(log_data)
-                                
-                                # Success message and download link
-                                st.success("✅ Details saved successfully!")
-                                st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
-                                
-                            except Exception as e:
-                                st.error(f"❌ Error saving data: {str(e)}")
+                        # Submit button inside form
+                        submit_button = st.form_submit_button("📥 Download Results", type="primary")
+                        
+                        if submit_button:
+                            if not all([turing_email, project_name, client_name]):
+                                st.error("⚠️ Please fill in all required fields")
+                            else:
+                                try:
+                                    # Save results to CSV
+                                    results.to_csv(filename, index=False)
+                                    
+                                    # Log the download
+                                    log_data = {
+                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        "email": turing_email,
+                                        "project": project_name,
+                                        "client": client_name,
+                                        "opportunity": opportunity_type,
+                                        "rows_found": rows_found,
+                                        "file_path": filename
+                                    }
+                                    save_log_to_csv(log_data)
+                                    
+                                    # Success message and download link
+                                    st.success("✅ Details saved successfully!")
+                                    st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Error saving data: {str(e)}")
 
 
         except Exception as e:
