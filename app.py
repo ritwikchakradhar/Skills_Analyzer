@@ -276,89 +276,78 @@ def main():
                 # Display Results Summary
                 st.header("3. Results Summary")
                 rows_found = results.shape[0]
-                
-                # Only show the count and analysis info
                 st.info(f"""
                 📊 Analysis Results:
                 - Total trainers found: {rows_found}
                 - Skills analyzed: {', '.join(selected_skills + ([user_skill] if user_skill else []))}
                 - Minimum score requirement: {min_score}%
                 """)
-                
+
+                # Download section
                 if rows_found > 0:
                     st.markdown("---")
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
 
-                # Download section
-if rows_found > 0:
-    st.markdown("---")
-    st.subheader("📝 Download Information")
-    st.write("Please fill in the following details to download the results:")
+                    # Using st.form for the download information
+                    with st.form(key="download_form"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            turing_email = st.text_input("Turing Email ID")
+                            project_name = st.text_input("Project Name")
+                            
+                        with col2:
+                            client_name = st.text_input("Client Name")
+                            opportunity_type = st.selectbox(
+                                "Opportunity Type",
+                                ["Fulltime", "Part Time"]
+                            )
+                        
+                        submit_button = st.form_submit_button("Submit Details", type="primary")
 
-    # Using st.form for the download information
-    with st.form(key="download_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            turing_email = st.text_input("Turing Email ID")
-            project_name = st.text_input("Project Name")
-            
-        with col2:
-            client_name = st.text_input("Client Name")
-            opportunity_type = st.selectbox(
-                "Opportunity Type",
-                ["Fulltime", "Part Time"]
-            )
-        
-        submit_button = st.form_submit_button("Submit Details", type="primary")
+                    # Handle form submission
+                    if submit_button:
+                        if not all([turing_email, project_name, client_name]):
+                            st.error("⚠️ Please fill in all required fields")
+                        else:
+                            # Generate filename and convert data
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            filename = f"qualified_trainers_{timestamp}.csv"
+                            csv_data = convert_df_to_csv(results)
 
-    # Handle form submission
-    if submit_button:
-        if not all([turing_email, project_name, client_name]):
-            st.error("⚠️ Please fill in all required fields")
-        else:
-            # Generate filename and convert data
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"qualified_trainers_{timestamp}.csv"
-            csv_data = convert_df_to_csv(results)
+                            # Create log entry
+                            log_data = {
+                                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                "email": turing_email,
+                                "project": project_name,
+                                "client": client_name,
+                                "opportunity": opportunity_type,
+                                "rows_found": rows_found,
+                                "filename": filename,
+                                "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
+                                "min_score": min_score
+                            }
 
-            # Create log entry
-            log_data = {
-                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "email": turing_email,
-                "project": project_name,
-                "client": client_name,
-                "opportunity": opportunity_type,
-                "rows_found": rows_found,
-                "filename": filename,
-                "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
-                "min_score": min_score
-            }
+                            # Log to Google Sheets
+                            try:
+                                if log_to_sheets(log_data):
+                                    st.success("✅ Details logged successfully!")
+                                else:
+                                    st.warning("⚠️ Failed to log details, but you can still download the file.")
+                            except Exception as e:
+                                st.error(f"❌ Error logging details: {str(e)}")
 
-            # Log to Google Sheets
-            try:
-                if log_to_sheets(log_data):
-                    st.success("✅ Details logged successfully!")
-                else:
-                    st.warning("⚠️ Failed to log details, but you can still download the file.")
-            except Exception as e:
-                st.error(f"❌ Error logging details: {str(e)}")
-
-            # Show download button
-            st.markdown("### Download Your Results")
-            st.write("Click below to download your CSV file:")
-            st.download_button(
-                label="📥 Download CSV File",
-                data=csv_data,
-                file_name=filename,
-                mime="text/csv",
-                key='download-csv'
-            )
-                                    
-            except Exception as e:
-                                    st.error(f"❌ Error preparing download: {str(e)}")
-                                    st.exception(e)  # This will show the full error trace
+                            # Show download button
+                            st.markdown("### Download Your Results")
+                            st.write("Click below to download your CSV file:")
+                            st.download_button(
+                                label="📥 Download CSV File",
+                                data=csv_data,
+                                file_name=filename,
+                                mime="text/csv",
+                                key='download-csv'
+                            )
                         
         except Exception as e:
             st.error(f"Error processing managers file: {str(e)}")
