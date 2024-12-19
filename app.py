@@ -235,7 +235,7 @@ def main():
                 st.header("3. Results Summary")
                 rows_found = results.shape[0]
                 
-                # Clear summary with detailed information
+                # Only show the count and analysis info
                 st.info(f"""
                 📊 Analysis Results:
                 - Total trainers found: {rows_found}
@@ -243,11 +243,7 @@ def main():
                 - Minimum score requirement: {min_score}%
                 """)
                 
-                # Show preview of results
                 if rows_found > 0:
-                    st.write("### Preview of Matched Trainers")
-                    st.dataframe(results.head())
-                    
                     st.markdown("---")
                     st.subheader("📝 Download Information")
                     st.write("Please fill in the following details to download the results:")
