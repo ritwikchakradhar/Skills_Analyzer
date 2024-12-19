@@ -193,32 +193,56 @@ def main():
             rows_found = results.shape[0]
             st.success(f"Total trainers found meeting criteria: {rows_found}")
 
-            # Download Button
+            # Download Section
             if rows_found > 0:
                 filename = f"qualified_trainers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                results.to_csv(filename, index=False)
-
+                
+                # Initialize session state for form visibility
+                if 'show_form' not in st.session_state:
+                    st.session_state.show_form = False
+                
+                # Download button to trigger form
                 if st.button("📥 Download Trainer Data"):
-                    with st.form("log_details_form", clear_on_submit=True):
+                    st.session_state.show_form = True
+                
+                # Show form when button is clicked
+                if st.session_state.show_form:
+                    with st.form(key="download_form"):
+                        st.subheader("Please provide additional information")
                         turing_email = st.text_input("Enter your Turing email ID")
                         project_name = st.text_input("Enter the Project Name")
                         client_name = st.text_input("Enter the Client Name")
-                        opportunity_type = st.selectbox("Select Opportunity Type", ["Fulltime", "Part Time"])
-                        submitted = st.form_submit_button("Submit")
-
-                    if submitted:
-                        log_data = {
-                            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            "email": turing_email,
-                            "project": project_name,
-                            "client": client_name,
-                            "opportunity": opportunity_type,
-                            "rows_found": rows_found,
-                            "file_path": filename
-                        }
-                        save_log_to_csv(log_data)
-                        st.success("Details saved and file ready for download.")
-                        st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
+                        opportunity_type = st.selectbox(
+                            "Select Opportunity Type", 
+                            ["Fulltime", "Part Time"]
+                        )
+                        submit_button = st.form_submit_button("Submit and Download")
+                        
+                        if submit_button:
+                            if not all([turing_email, project_name, client_name]):
+                                st.error("Please fill in all fields")
+                            else:
+                                # Save results to CSV
+                                results.to_csv(filename, index=False)
+                                
+                                # Log the download
+                                log_data = {
+                                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    "email": turing_email,
+                                    "project": project_name,
+                                    "client": client_name,
+                                    "opportunity": opportunity_type,
+                                    "rows_found": rows_found,
+                                    "file_path": filename
+                                }
+                                save_log_to_csv(log_data)
+                                
+                                # Create download link
+                                st.success("Details saved successfully!")
+                                st.markdown(get_download_link(results, filename), unsafe_allow_html=True)
+                                
+                                # Reset form visibility
+                                st.session_state.show_form = False
 
 if __name__ == "__main__":
     main()
