@@ -1,7 +1,22 @@
 import streamlit as st
+import pandas as pd
+import re
+from datetime import datetime
+import base64
+from fuzzywuzzy import process
+from typing import Dict, List, Optional
+import json
+import csv
+import os
 from google.oauth2 import service_account
 import gspread
-import pandas as pd
+
+# Page config
+st.set_page_config(
+    page_title="Skills Analyzer",
+    page_icon="📊",
+    layout="wide"
+)
 
 # Create a Google Sheets connection
 @st.cache_resource
@@ -30,7 +45,7 @@ def log_to_sheets(log_data: dict):
             return False
             
         # Open the spreadsheet (use your spreadsheet ID)
-        sheet = client.open_by_key(st.secrets["spreadsheet_id"]).worksheet("Logs")
+        sheet = client.open_by_key(st.secrets["sheets"]["spreadsheet_id"]).worksheet("Logs")
         
         # If sheet is empty, add headers
         if sheet.row_count == 0:
@@ -55,41 +70,7 @@ def log_to_sheets(log_data: dict):
         
     except Exception as e:
         st.error(f"Failed to log to Google Sheets: {str(e)}")
-        return Falseimport streamlit as st
-import pandas as pd
-import re
-from datetime import datetime
-import base64
-from fuzzywuzzy import process
-from typing import Dict, List, Optional
-import json
-import csv
-import os
-
-# Page config
-st.set_page_config(
-    page_title="Skills Analyzer",
-    page_icon="📊",
-    layout="wide"
-)
-
-# Cache the CSV conversion
-# Initialize session state for logs
-if 'download_logs' not in st.session_state:
-    st.session_state.download_logs = []
-
-@st.cache_data
-def convert_df_to_csv(df):
-    """Convert dataframe to CSV string with caching"""
-    return df.to_csv(index=False).encode('utf-8')
-
-def append_to_logs(log_data: dict):
-    """Append to session state logs"""
-    st.session_state.download_logs.append(log_data)
-    
-    # You can view logs in the Streamlit app
-    if st.sidebar.checkbox("Show Download Logs"):
-        st.sidebar.dataframe(pd.DataFrame(st.session_state.download_logs))
+        return False
 
 # Load Skills State
 def load_skill_variations() -> Dict[str, List[str]]:
@@ -105,6 +86,11 @@ def load_skill_variations() -> Dict[str, List[str]]:
 # Initialize skill variations in session state
 if "skill_variations" not in st.session_state:
     st.session_state.skill_variations = load_skill_variations()
+
+@st.cache_data
+def convert_df_to_csv(df):
+    """Convert dataframe to CSV string with caching"""
+    return df.to_csv(index=False).encode('utf-8')
 
 # Helper Functions
 def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
@@ -333,10 +319,28 @@ def main():
                                     # Convert DataFrame to CSV
                                     csv_data = convert_df_to_csv(results)
                                     
-                                    # Create download button
-                                    st.success("✅ Details saved successfully! Click below to download.")
+                                    # Create log entry
+                                    log_data = {
+                                        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                        "email": turing_email,
+                                        "project": project_name,
+                                        "client": client_name,
+                                        "opportunity": opportunity_type,
+                                        "rows_found": rows_found,
+                                        "filename": filename,
+                                        "skills": ", ".join(selected_skills + ([user_skill] if user_skill else [])),
+                                        "min_score": min_score
+                                    }
+                                    
+                                    # Log to Google Sheets
+                                    if log_to_sheets(log_data):
+                                        st.success("✅ Download details logged successfully!")
+                                    else:
+                                        st.warning("⚠️ Failed to log download details, but you can still download the file.")
+                                    
+                                    # Download button
                                     st.download_button(
-                                        label="📥 Download CSV File",
+                                        label="📥 Download Results CSV",
                                         data=csv_data,
                                         file_name=filename,
                                         mime="text/csv",
