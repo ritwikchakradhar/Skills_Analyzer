@@ -1,4 +1,4 @@
-st.session_state.skill_variations = {
+{
     '.net core': ['.net core', '.netcore', 'dotnet core', '.net-core'],
     'airflow': ['airflow'],
     'algorithms and data structures': ['algorithms and data structures', 'data structures', 'algorithms'],
